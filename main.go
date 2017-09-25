@@ -66,8 +66,8 @@ func connect(out chan<- *planeMsg) {
 	for {
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
-			dur := time.Millisecond * time.Duration(i)
-			fmt.Fprintf(os.Stderr, "Failed to connect. %v. Retrying in %v", err, dur)
+			dur := time.Millisecond * time.Duration(i) * time.Duration(100)
+			fmt.Fprintf(os.Stderr, "Failed to connect. %v. Retrying in %v\n", err, dur)
 			time.Sleep(dur)
 			i += i
 			continue
