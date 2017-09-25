@@ -37,7 +37,7 @@ const (
 	onGround     // Flag to indicate ground squawk switch is active
 )
 
-func parseMessage(m []byte) {
+func parseMessage(m []byte, out chan<- *planeMsg) {
 	parts := bytes.Split(m, []byte{','})
 	if len(parts) != 22 {
 		fmt.Fprintf(os.Stderr, "Discarding bad message: %q", m)
@@ -65,10 +65,10 @@ func parseMessage(m []byte) {
 	p, err := parseMsgType(parts, ttype)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error trying to decode message. %v", err)
+		return
 	}
 
-	fmt.Printf("Received message of type: %v - %d for plane: %q. At: %v\n", mtype, p.msg.tType, p.icoa, p.msg.dRec)
-
+	out <- p
 }
 
 type planeMsg struct {
