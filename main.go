@@ -7,6 +7,7 @@ import (
 	"os"
 	"bufio"
 	"bytes"
+	"strconv"
 )
 
 var (
@@ -28,8 +29,6 @@ func main() {
 	fmt.Println("Connected")
 
 	reader := bufio.NewReader(conn)
-
-	//buf := bytes.Buffer{}
 
 	for b, err := reader.ReadBytes('\n'); err == nil; b, err = reader.ReadBytes('\n') {
 		fmt.Printf("%s", b)
@@ -73,12 +72,23 @@ func parseMessage(m []byte) {
 		return
 	}
 
-	ficao := string(parts[icao])
-	if ficao == "000000" {
+	modesHex := string(parts[icao])
+	if modesHex == "000000" {
 		fmt.Println("Discarding message with empty ICAO")
 		return
 	}
+
 	mtype := string(parts[msgType])
-	fmt.Printf("Received message of type: %v for plane: %v\n", mtype, ficao)
+	if mtype != "MSG" {
+		// TODO I'm not ready to handle this yet.
+		fmt.Println("Unable to handle message of type %q\n", mtype)
+		return
+	}
+
+	ttype, err := strconv.Atoi(string(parts[tType]))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error converting transmission type (only on msg fields?). %q, error: %v", parts[tType], err)
+	}
+	fmt.Printf("Received message of type: %v - %d for plane: %v\n", mtype, ttype, modesHex)
 
 }
