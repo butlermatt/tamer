@@ -1,53 +1,20 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"net"
 	"os"
-	"time"
+	"bufio"
+	"bytes"
 )
 
 var (
 	addr string
 )
 
-const (
-	// Escape code
-	esc byte = 0x1A
-)
-
-const (
-	// AC Mode
-	modeAc byte = '1'
-	// Mode S Short Frame
-	modeSs byte = '2'
-	// Mode S Long Frame
-	modeSl byte = '3'
-	// Status Data
-	modeSd byte = '4'
-)
-
-const (
-	dfShortTacs         uint = 0
-	dfSurveillanceAlt   uint = 4
-	dfSurveillanceIdent uint = 5
-	dfAllCall           uint = 11
-	dfLongTacs          uint = 16
-	dfExtended          uint = 17
-	dfTisB              uint = 18
-	dfExtendedMil       uint = 19
-	dfCommBAlt          uint = 20
-	dfCommBModeA        uint = 21
-	dfMilitary          uint = 22
-	dfLongReply         uint = 24
-)
-
 func init() {
-	flag.StringVar(&addr, "a", "localhost:30005", "Address and port to connect to for input.")
+	flag.StringVar(&addr, "a", "localhost:30003", "Address and port to connect to for input.")
 }
 
 func main() {
@@ -62,127 +29,56 @@ func main() {
 
 	reader := bufio.NewReader(conn)
 
-	buf := bytes.Buffer{}
+	//buf := bytes.Buffer{}
 
-	for b, err := reader.ReadByte(); err == nil; b, err = reader.ReadByte() {
-		if b == esc {
-			t, err := reader.Peek(1)
-			if err != nil {
-				break
-			}
-			if t[0] == esc {
-				err = buf.WriteByte(b)
-				_, _ = reader.ReadByte()
-				//fmt.Println("Saved invalid break")
-				continue
-			}
-			if buf.Len() > 0 {
-				processMessage(buf.Bytes()) // Make this a channel instead? Or a go routine
-				buf = bytes.Buffer{}
-			}
-		}
-
-		buf.WriteByte(b)
+	for b, err := reader.ReadBytes('\n'); err == nil; b, err = reader.ReadBytes('\n') {
+		fmt.Printf("%s", b)
+		go parseMessage(b)
 	}
 }
 
-func processMessage(m []byte) {
-	if len(m) < 2 {
-		fmt.Println("Discarding empty message")
+
+const (
+	// Various indexes of data
+	msgType = iota // Message type
+	tType 		  // Transmission type. MSG type only
+	_			  // Session Id. Don't care
+	_			  // Aircraft ID. Don't care (usually 11111)
+	icao			  // ModeS or ICAO Hex number
+	_			  // Flight ID. Don't care (usually 11111)
+	dGen			  // Date message was Generated
+	tGen			  // Time message was Generated
+	dLog			  // Date message was logged.
+	tLog			  // Time message was logged.
+
+	// May not be in every message
+	callSign		  // Call Sign (Flight ID, Flight Number or Registration)
+	alt			  // Altitude
+	groundSpeed    // Ground Speed (not indicative of air speed)
+	track		  // Track of aircraft, not heading. Derived from Velocity E/w and Velocity N/S
+	latitude		  // As it says
+	longitude	  // As it says
+	verticalRate   // 64ft resolution
+	squawk		  // Assigned Mode A squawk code
+	squawkAlert    // Flag to indicate squawk change.
+	emergency	  // Flag to indicate Emergency
+	spi			  // Flag to indicate transponder Ident has been activated
+	onGround		  // Flag to indicate ground squawk switch is active
+)
+
+func parseMessage(m []byte) {
+	parts := bytes.Split(m, []byte{','})
+	if len(parts) != 22 {
+		fmt.Fprintf(os.Stderr, "Discarding bad message: %q", m)
 		return
 	}
 
-	if m[0] != esc {
-		fmt.Printf("Invalid message received: %X\n", m)
+	ficao := string(parts[icao])
+	if ficao == "000000" {
+		fmt.Println("Discarding message with empty ICAO")
+		return
 	}
+	mtype := string(parts[msgType])
+	fmt.Printf("Received message of type: %v for plane: %v\n", mtype, ficao)
 
-	var msgType string
-	switch m[1] {
-	case modeAc:
-		msgType = "AC"
-	case modeSs:
-		msgType = "S-Short"
-	case modeSl:
-		msgType = "S-Long"
-	case modeSd:
-		msgType = "Data dump?"
-	default:
-		msgType = "Continuation?"
-	}
-
-	tm := parseTime(m[2:8])
-	modeS := parseModeS(m[9:])
-	fmt.Printf("%X - Type: %s, Time: %v Signal: %d. Msg Type: %v\n", m, msgType, tm, m[8], modeS)
-}
-
-func parseTime(t []byte) time.Time {
-	// Takes a 6 byte array, which represents a 48bit GPS timestamp
-	// http://wiki.modesbeast.com/Radarcape:Firmware_Versions#The_GPS_timestamp
-	// and parses it into a Time.time
-
-	upper := []byte{
-		t[0]<<2 + t[1]>>6,
-		t[1]<<2 + t[2]>>6,
-		0, 0, 0, 0}
-	lower := []byte{
-		t[2] & 0x3F, t[3], t[4], t[5]}
-
-	// the 48bit timestamp is 18bit day seconds | 30bit nanoseconds
-	secs := binary.BigEndian.Uint16(upper)
-	nano := int(binary.BigEndian.Uint32(lower))
-
-	hr := int(secs / 3600)
-	min := int(secs / 60 % 60)
-	sec := int(secs % 60)
-
-	utcDate := time.Now().UTC()
-
-	return time.Date(
-		utcDate.Year(), utcDate.Month(), utcDate.Day(),
-		hr, min, sec, nano, time.UTC)
-}
-
-func parseModeS(m []byte) string {
-	bad := true
-	for i := 0; i < len(m); i++ {
-		if m[i] != 0 {
-			bad = false
-			break
-		}
-	}
-
-	if bad {
-		return "All zeros"
-	}
-
-	typ := uint((m[0] & 0xF8) >> 3)
-
-	switch typ {
-	case dfShortTacs:
-		return "Short Tacs"
-	case dfSurveillanceAlt:
-		return "Surveillance Altitude"
-	case dfSurveillanceIdent:
-		return "Surveillance Mode A"
-	case dfAllCall:
-		return "All Call"
-	case dfLongTacs:
-		return "Long Tacs"
-	case dfExtended:
-		return "Extended Squitter"
-	case dfTisB:
-		return "TisB"
-	case dfExtendedMil:
-		return "Military Extended Squitter"
-	case dfCommBAlt:
-		return "Comm B Altitude"
-	case dfCommBModeA:
-		return "Comm B with Mode A"
-	case dfMilitary:
-		return "Military"
-	case dfLongReply:
-		return "Long Rely"
-	}
-
-	return ""
 }
