@@ -12,55 +12,11 @@ import (
 
 var (
 	addr string
+	planeCache = make(map[uint]*Plane)
 )
 
 func init() {
 	flag.StringVar(&addr, "a", "localhost:30003", "Address and port to connect to for input.")
-}
-
-// TODO: Don't change a value (or add squawk etc) if it already exists with that value.
-// Don't add that to the history. However add new changes. Always update LastSeen if after
-type Plane struct {
-	Icao		  uint
-	CallSigns []string
-	Squawks   []string
-	Locations []Location
-	Altitude  int
-	Track     float32
-	Speed     float32
-	Vertical  int
-	LastSeen  time.Time
-	History   []*message // won't contain duplicate messages such as "on ground" unless they change
-	// Various flags
-	SquawkCh  bool
-	Emergency bool
-	Ident     bool
-	OnGround  bool
-}
-
-func (p *Plane) WriteCallSign(cs string) bool {
-	var found bool
-	for _, c := range p.CallSigns {
-		if cs == c {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		p.CallSigns = append(p.CallSigns, cs)
-	}
-	return found
-}
-
-func (p *Plane) WriteHistory(m *message) {
-	p.History = append(p.History, m)
-}
-
-type Location struct {
-	Time      time.Time
-	Latitude  string
-	Longitude string
 }
 
 func main() {
@@ -70,56 +26,92 @@ func main() {
 
 	go connect(msgs)
 
-	planeCache := make(map[uint]*Plane)
+	for {
+		select {
+		case p := <-msgs:
+			updatePlane(p)
+		}
+	}
+}
 
+func updatePlane(p *planeMsg) {
 	buf := bytes.Buffer{}
-	for p := range msgs {
 
-		pl, ok := planeCache[p.icoa]
-		if !ok {
-			pl = new(Plane)
-			pl.Icao = p.icoa
-			planeCache[pl.Icao] = pl
-		}
-
-		if p.msg.dGen.After(pl.LastSeen) {
-			pl.LastSeen = p.msg.dGen
-		}
-
-		buf.WriteString("Received message: Plane: \"")
-		buf.WriteString(fmt.Sprintf("%X", p.icoa))
-		buf.WriteString("\" At: ")
-		buf.WriteString(p.msg.dRec.String())
-
-		var dataStr string
-		switch p.msg.tType {
-		case 1:
-			if pl.WriteCallSign(p.msg.callSign) {
-				pl.WriteHistory(p.msg)
-			}
-			dataStr = fmt.Sprintf(" callsign: %q", p.msg.callSign)
-		case 2:
-			dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", p.msg.altitude, p.msg.groundSpeed, p.msg.track, p.msg.latitude, p.msg.longitude)
-		case 3:
-			dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", p.msg.altitude, p.msg.latitude, p.msg.longitude)
-		case 4:
-			dataStr = fmt.Sprintf(" Speed: %.2f, Track: %.2f, Vertical Rate: %d", p.msg.groundSpeed, p.msg.track, p.msg.vertical)
-		case 5:
-			dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
-		case 6:
-			dataStr = fmt.Sprintf(" Altitude: %d, SquawkCode: %q", p.msg.altitude, p.msg.squawk)
-		case 7:
-			dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
-		case 8:
-			dataStr = fmt.Sprintf(" OnGround: %v", p.msg.onGround)
-		}
-
-		buf.WriteString(dataStr)
-
-		fmt.Println(buf.String())
-		buf.Reset()
+	pl, ok := planeCache[p.icoa]
+	if !ok {
+		pl = new(Plane)
+		pl.Icao = p.icoa
+		planeCache[pl.Icao] = pl
 	}
 
+	if p.msg.dGen.After(pl.LastSeen) {
+		pl.LastSeen = p.msg.dGen
+	}
+
+	buf.WriteString("Received message: Plane: \"")
+	buf.WriteString(fmt.Sprintf("%X", p.icoa))
+	buf.WriteString("\" At: ")
+	buf.WriteString(p.msg.dRec.String())
+
+	var dataStr string
+	var written bool
+	switch p.msg.tType {
+	case 1:
+		written = pl.SetCallSign(p.msg.callSign)
+		dataStr = fmt.Sprintf(" callsign: %q", p.msg.callSign)
+	case 2:
+		written = written || pl.SetAltitude(p.msg.altitude)
+		written = written || pl.SetSpeed(p.msg.groundSpeed)
+		written = written || pl.SetTrack(p.msg.track)
+		written = written || pl.SetLocation(p.msg.latitude, p.msg.longitude, p.msg.dGen)
+		written = written || pl.SetOnGround(p.msg.onGround)
+
+		dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", p.msg.altitude, p.msg.groundSpeed, p.msg.track, p.msg.latitude, p.msg.longitude)
+	case 3:
+		written = written || pl.SetAltitude(p.msg.altitude)
+		written = written || pl.SetLocation(p.msg.latitude, p.msg.longitude, p.msg.dGen)
+		written = written || pl.SetSquawkCh(p.msg.squawkCh)
+		written = written || pl.SetEmergency(p.msg.emergency)
+		written = written || pl.SetIdent(p.msg.ident)
+		written = written || pl.SetOnGround(p.msg.onGround)
+
+		dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", p.msg.altitude, p.msg.latitude, p.msg.longitude)
+	case 4:
+		written = written || pl.SetSpeed(p.msg.groundSpeed)
+		written = written || pl.SetTrack(p.msg.track)
+		written = written || pl.SetVertical(p.msg.vertical)
+
+		dataStr = fmt.Sprintf(" Speed: %.2f, Track: %.2f, Vertical Rate: %d", p.msg.groundSpeed, p.msg.track, p.msg.vertical)
+	case 5:
+		written = written || pl.SetAltitude(p.msg.altitude)
+		written = written || pl.SetSquawkCh(p.msg.squawkCh)
+		written = written || pl.SetIdent(p.msg.ident)
+		written = written || pl.SetOnGround(p.msg.onGround)
+		dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+	case 6:
+		written = written || pl.SetAltitude(p.msg.altitude)
+		written = written || pl.SetSquawk(p.msg.squawk)
+		written = written || pl.SetSquawkCh(p.msg.squawkCh)
+		written = written || pl.SetEmergency(p.msg.emergency)
+		written = written || pl.SetIdent(p.msg.ident)
+		written = written || pl.SetOnGround(p.msg.onGround)
+		dataStr = fmt.Sprintf(" Altitude: %d, SquawkCode: %q", p.msg.altitude, p.msg.squawk)
+	case 7:
+		written = written || pl.SetAltitude(p.msg.altitude)
+		written = written || pl.SetOnGround(p.msg.onGround)
+		dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+	case 8:
+		written = written || pl.SetOnGround(p.msg.onGround)
+		dataStr = fmt.Sprintf(" OnGround: %v", p.msg.onGround)
+	}
+	if written {
+		pl.SetHistory(p.msg)
+	}
+
+	buf.WriteString(dataStr)
+
+	fmt.Println(buf.String())
+	buf.Reset()
 }
 
 func connect(out chan<- *planeMsg) {
