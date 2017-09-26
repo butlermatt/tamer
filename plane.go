@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"time"
+	"bytes"
+	"fmt"
+)
 
 type Location struct {
 	Time      time.Time
@@ -26,6 +30,40 @@ type Plane struct {
 	Emergency bool
 	Ident     bool
 	OnGround  bool
+}
+
+func (p *Plane) ToJson() string {
+	buf := bytes.Buffer{}
+	buf.WriteString("{")
+	buf.WriteString(fmt.Sprintf("icao: \"%06X\", ", p.Icao))
+	buf.WriteString("callsigns: [")
+	for i, cs := range p.CallSigns {
+		buf.WriteString(fmt.Sprintf("%q", cs))
+		if i != len(p.CallSigns) - 1 {
+			buf.WriteString(", ")
+		}
+	}
+	if len(p.Locations) > 0 {
+		lastLoc := p.Locations[len(p.Locations) - 1]
+		buf.WriteString(fmt.Sprintf("], location: \"%s,%s\", ", lastLoc.Latitude, lastLoc.Longitude))
+	} else {
+		buf.WriteString("], ")
+	}
+	buf.WriteString("squawks: [")
+	for i, sq := range p.Squawks {
+		buf.WriteString(fmt.Sprintf("%q", sq))
+		if i != len(p.Squawks) - 1 {
+			buf.WriteString(", ")
+		}
+	}
+	buf.WriteString(fmt.Sprintf("], altitude: %d, ", p.Altitude))
+	buf.WriteString(fmt.Sprintf("track: %.2f, ", p.Track))
+	buf.WriteString(fmt.Sprintf("speed: %.2f, ", p.Speed))
+	buf.WriteString(fmt.Sprintf("vertical: %d, ", p.Vertical))
+	buf.WriteString(fmt.Sprintf("lastSeen: %q", p.LastSeen.String()))
+	buf.WriteString("}")
+
+	return buf.String()
 }
 
 // SetCallSign tries to add the call sign to the slice of CallSigns for the Plane.

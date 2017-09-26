@@ -188,7 +188,7 @@ func parseMsgType(msg [][]byte, tt int) (*planeMsg, error) {
 		m.onGround = parseBool(msg[onGround])
 	case 6:
 		m.altitude = parseInt(msg[alt])
-		m.squawk = string(msg[squawk])
+		m.squawk = string(bytes.TrimSpace(msg[squawk]))
 		m.squawkCh = parseBool(msg[squawkAlert])
 		m.emergency = parseBool(msg[emergency])
 		m.ident = parseBool(msg[identActive])

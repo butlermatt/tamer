@@ -8,21 +8,31 @@ import (
 	"os"
 	"time"
 	"bytes"
+	"strings"
 )
 
 var (
+	// Command line flags
 	addr string
+	port uint
+)
+
+var (
 	planeCache = make(map[uint]*Plane)
 )
 
 func init() {
 	flag.StringVar(&addr, "a", "localhost:30003", "Address and port to connect to for input.")
+	flag.UintVar(&port, "p", 8888, "Port to bind output webserver.")
 }
 
 func main() {
 	flag.Parse()
 
 	msgs := make(chan *planeMsg)
+	cmds := make(chan BoardCmd)
+
+	json := StartServer(cmds)
 
 	go connect(msgs)
 
@@ -30,8 +40,31 @@ func main() {
 		select {
 		case p := <-msgs:
 			updatePlane(p)
+		case cmd := <-cmds:
+			if cmd == ListAll {
+				json <- dumpJson()
+			}
 		}
 	}
+}
+
+func dumpJson() string {
+	buf := bytes.Buffer{}
+
+	buf.WriteString("[")
+
+	l := len(planeCache)
+	sl := make([]string, l)
+
+	l -= 1
+	for _, pl := range planeCache {
+		sl[l] = pl.ToJson()
+	}
+
+	buf.WriteString(strings.Join(sl, ","))
+
+	buf.WriteString("]")
+	return buf.String()
 }
 
 func updatePlane(p *planeMsg) {
@@ -49,7 +82,7 @@ func updatePlane(p *planeMsg) {
 	}
 
 	buf.WriteString("Received message: Plane: \"")
-	buf.WriteString(fmt.Sprintf("%X", p.icoa))
+	buf.WriteString(fmt.Sprintf("%06X", p.icoa))
 	buf.WriteString("\" At: ")
 	buf.WriteString(p.msg.dRec.String())
 
