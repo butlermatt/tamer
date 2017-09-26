@@ -18,6 +18,51 @@ func init() {
 	flag.StringVar(&addr, "a", "localhost:30003", "Address and port to connect to for input.")
 }
 
+// TODO: Don't change a value (or add squawk etc) if it already exists with that value.
+// Don't add that to the history. However add new changes. Always update LastSeen if after
+type Plane struct {
+	Icao		  uint
+	CallSigns []string
+	Squawks   []string
+	Locations []Location
+	Altitude  int
+	Track     float32
+	Speed     float32
+	Vertical  int
+	LastSeen  time.Time
+	History   []*message // won't contain duplicate messages such as "on ground" unless they change
+	// Various flags
+	SquawkCh  bool
+	Emergency bool
+	Ident     bool
+	OnGround  bool
+}
+
+func (p *Plane) WriteCallSign(cs string) bool {
+	var found bool
+	for _, c := range p.CallSigns {
+		if cs == c {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		p.CallSigns = append(p.CallSigns, cs)
+	}
+	return found
+}
+
+func (p *Plane) WriteHistory(m *message) {
+	p.History = append(p.History, m)
+}
+
+type Location struct {
+	Time      time.Time
+	Latitude  string
+	Longitude string
+}
+
 func main() {
 	flag.Parse()
 
@@ -25,17 +70,33 @@ func main() {
 
 	go connect(msgs)
 
+	planeCache := make(map[uint]*Plane)
+
 	buf := bytes.Buffer{}
 	for p := range msgs {
 
+		pl, ok := planeCache[p.icoa]
+		if !ok {
+			pl = new(Plane)
+			pl.Icao = p.icoa
+			planeCache[pl.Icao] = pl
+		}
+
+		if p.msg.dGen.After(pl.LastSeen) {
+			pl.LastSeen = p.msg.dGen
+		}
+
 		buf.WriteString("Received message: Plane: \"")
-		buf.WriteString(p.icoa)
+		buf.WriteString(fmt.Sprintf("%X", p.icoa))
 		buf.WriteString("\" At: ")
 		buf.WriteString(p.msg.dRec.String())
 
 		var dataStr string
 		switch p.msg.tType {
 		case 1:
+			if pl.WriteCallSign(p.msg.callSign) {
+				pl.WriteHistory(p.msg)
+			}
 			dataStr = fmt.Sprintf(" callsign: %q", p.msg.callSign)
 		case 2:
 			dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", p.msg.altitude, p.msg.groundSpeed, p.msg.track, p.msg.latitude, p.msg.longitude)

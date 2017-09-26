@@ -72,7 +72,7 @@ func parseMessage(m []byte, out chan<- *planeMsg) {
 }
 
 type planeMsg struct {
-	icoa string
+	icoa uint
 	msg  *message
 }
 
@@ -151,8 +151,13 @@ func parseMsgType(msg [][]byte, tt int) (*planeMsg, error) {
 		return nil, errors.Wrap(err, "unable to parse received time")
 	}
 
+	icaoDec, err := strconv.ParseUint(string(msg[icao]), 16, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to parse icao hex")
+	}
+
 	m := &message{tType: tt, dGen: sentTime, dRec: recvTime}
-	p := &planeMsg{icoa: string(msg[icao]), msg: m}
+	p := &planeMsg{icoa: uint(icaoDec), msg: m}
 
 	switch tt {
 	case 1:
