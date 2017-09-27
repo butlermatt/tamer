@@ -161,7 +161,7 @@ func parseMsgType(msg [][]byte, tt int) (*planeMsg, error) {
 
 	switch tt {
 	case 1:
-		m.callSign = string(msg[callSign])
+		m.callSign = string(bytes.TrimSpace(msg[callSign]))
 	case 2:
 		m.altitude = parseInt(msg[alt])
 		m.groundSpeed = parseFloat(msg[groundSpeed])
