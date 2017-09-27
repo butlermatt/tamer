@@ -40,13 +40,15 @@ const (
 func parseMessage(m []byte, out chan<- *planeMsg) {
 	parts := bytes.Split(m, []byte{','})
 	if len(parts) != 22 {
-		fmt.Fprintf(os.Stderr, "Discarding bad message: %q", m)
+		if verbose {
+			fmt.Fprintf(os.Stderr, "Discarding bad message: %q", m)
+		}
 		return
 	}
 
 	modesHex := string(parts[icao])
 	if modesHex == "000000" {
-		if verbose {
+		if verbose && veryVerbose {
 			fmt.Println("Discarding message with empty ICAO")
 		}
 		return
