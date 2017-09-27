@@ -182,7 +182,7 @@ func connect(out chan<- *planeMsg) {
 		reader := bufio.NewReader(conn)
 		for b, err := reader.ReadBytes('\n'); err == nil; b, err = reader.ReadBytes('\n') {
 			if verbose && veryVerbose {
-				fmt.Print(b)
+				fmt.Printf("%s", b)
 			}
 			go parseMessage(b, out)
 		}
