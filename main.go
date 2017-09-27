@@ -13,8 +13,10 @@ import (
 
 var (
 	// Command line flags
-	addr string
-	port uint
+	addr        string
+	port        uint
+	verbose     bool
+	veryVerbose bool
 )
 
 var (
@@ -24,6 +26,8 @@ var (
 func init() {
 	flag.StringVar(&addr, "a", "localhost:30003", "Address and port to connect to for input.")
 	flag.UintVar(&port, "p", 8888, "Port to bind output webserver.")
+	flag.BoolVar(&verbose, "v", false, "Enable verbose message logging. This will list contents of received messages.")
+	flag.BoolVar(&veryVerbose, "vv", false, "Enable very verbose message logging. This will list raw received messages. Requires verbose flag")
 }
 
 func main() {
@@ -82,25 +86,27 @@ func updatePlane(p *planeMsg) {
 		pl.LastSeen = p.msg.dGen
 	}
 
-	buf.WriteString("Received message: Plane: \"")
-	buf.WriteString(fmt.Sprintf("%06X", p.icoa))
-	buf.WriteString("\" At: ")
-	buf.WriteString(p.msg.dRec.String())
+	if verbose {
+		buf.WriteString(fmt.Sprintf("%s - %06X -", p.msg.dGen.String(), p.icoa))
+	}
 
 	var dataStr string
 	var written bool
 	switch p.msg.tType {
 	case 1:
 		written = pl.SetCallSign(p.msg.callSign)
-		dataStr = fmt.Sprintf(" callsign: %q", p.msg.callSign)
+		if verbose {
+			dataStr = fmt.Sprintf(" Callsign: %q", p.msg.callSign)
+		}
 	case 2:
 		written = pl.SetAltitude(p.msg.altitude) || written
 		written = pl.SetSpeed(p.msg.groundSpeed) || written
 		written = pl.SetTrack(p.msg.track) || written
 		written = pl.SetLocation(p.msg.latitude, p.msg.longitude, p.msg.dGen) || written
 		written = pl.SetOnGround(p.msg.onGround) || written
-
-		dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", p.msg.altitude, p.msg.groundSpeed, p.msg.track, p.msg.latitude, p.msg.longitude)
+		if verbose {
+			dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", p.msg.altitude, p.msg.groundSpeed, p.msg.track, p.msg.latitude, p.msg.longitude)
+		}
 	case 3:
 		written = pl.SetAltitude(p.msg.altitude) || written
 		written = pl.SetLocation(p.msg.latitude, p.msg.longitude, p.msg.dGen) || written
@@ -108,20 +114,24 @@ func updatePlane(p *planeMsg) {
 		written = pl.SetEmergency(p.msg.emergency) || written
 		written = pl.SetIdent(p.msg.ident) || written
 		written = pl.SetOnGround(p.msg.onGround) || written
-
-		dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", p.msg.altitude, p.msg.latitude, p.msg.longitude)
+		if verbose {
+			dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", p.msg.altitude, p.msg.latitude, p.msg.longitude)
+		}
 	case 4:
 		written = pl.SetSpeed(p.msg.groundSpeed) || written
 		written = pl.SetTrack(p.msg.track) || written
 		written = pl.SetVertical(p.msg.vertical) || written
-
-		dataStr = fmt.Sprintf(" Speed: %.2f, Track: %.2f, Vertical Rate: %d", p.msg.groundSpeed, p.msg.track, p.msg.vertical)
+		if verbose {
+			dataStr = fmt.Sprintf(" Speed: %.2f, Track: %.2f, Vertical Rate: %d", p.msg.groundSpeed, p.msg.track, p.msg.vertical)
+		}
 	case 5:
 		written = pl.SetAltitude(p.msg.altitude) || written
 		written = pl.SetSquawkCh(p.msg.squawkCh) || written
 		written = pl.SetIdent(p.msg.ident) || written
 		written = pl.SetOnGround(p.msg.onGround) || written
-		dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+		if verbose {
+			dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+		}
 	case 6:
 		written = pl.SetAltitude(p.msg.altitude) || written
 		written = pl.SetSquawk(p.msg.squawk) || written
@@ -129,23 +139,31 @@ func updatePlane(p *planeMsg) {
 		written = pl.SetEmergency(p.msg.emergency) || written
 		written = pl.SetIdent(p.msg.ident) || written
 		written = pl.SetOnGround(p.msg.onGround) || written
-		dataStr = fmt.Sprintf(" Altitude: %d, SquawkCode: %q", p.msg.altitude, p.msg.squawk)
+		if verbose {
+			dataStr = fmt.Sprintf(" Altitude: %d, SquawkCode: %q", p.msg.altitude, p.msg.squawk)
+		}
 	case 7:
 		written = pl.SetAltitude(p.msg.altitude) || written
 		written = pl.SetOnGround(p.msg.onGround) || written
-		dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+		if verbose {
+			dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+		}
 	case 8:
 		written = pl.SetOnGround(p.msg.onGround) || written
-		dataStr = fmt.Sprintf(" OnGround: %v", p.msg.onGround)
+		if verbose {
+			dataStr = fmt.Sprintf(" OnGround: %v", p.msg.onGround)
+		}
 	}
 	if written {
 		pl.SetHistory(p.msg)
 	}
 
-	buf.WriteString(dataStr)
+	if verbose {
+		buf.WriteString(dataStr)
 
-	fmt.Println(buf.String())
-	buf.Reset()
+		fmt.Println(buf.String())
+		buf.Reset()
+	}
 }
 
 func connect(out chan<- *planeMsg) {
@@ -163,7 +181,9 @@ func connect(out chan<- *planeMsg) {
 		fmt.Println("Connected")
 		reader := bufio.NewReader(conn)
 		for b, err := reader.ReadBytes('\n'); err == nil; b, err = reader.ReadBytes('\n') {
-			fmt.Printf("%s", b)
+			if verbose && veryVerbose {
+				fmt.Print(b)
+			}
 			go parseMessage(b, out)
 		}
 

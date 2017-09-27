@@ -46,7 +46,9 @@ func parseMessage(m []byte, out chan<- *planeMsg) {
 
 	modesHex := string(parts[icao])
 	if modesHex == "000000" {
-		fmt.Println("Discarding message with empty ICAO")
+		if verbose {
+			fmt.Println("Discarding message with empty ICAO")
+		}
 		return
 	}
 
