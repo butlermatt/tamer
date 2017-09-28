@@ -7,17 +7,23 @@ import (
 )
 
 type Location struct {
+	id        int
 	Time      time.Time
 	Latitude  string
 	Longitude string
+}
+
+type ValuePair struct {
+	id    int
+	value string
 }
 
 // TODO: Don't change a value (or add squawk etc) if it already exists with that value.
 // Don't add that to the history. However add new changes. Always update LastSeen if after
 type Plane struct {
 	Icao      uint
-	CallSigns []string
-	Squawks   []string
+	CallSigns []ValuePair
+	Squawks   []ValuePair
 	Locations []Location
 	Altitude  int
 	Track     float32
@@ -38,7 +44,7 @@ func (p *Plane) ToJson() string {
 	buf.WriteString(fmt.Sprintf("icao: \"%06X\", ", p.Icao))
 	buf.WriteString("callsigns: [")
 	for i, cs := range p.CallSigns {
-		buf.WriteString(fmt.Sprintf("%q", cs))
+		buf.WriteString(fmt.Sprintf("%q", cs.value))
 		if i != len(p.CallSigns) - 1 {
 			buf.WriteString(", ")
 		}
@@ -51,7 +57,7 @@ func (p *Plane) ToJson() string {
 	}
 	buf.WriteString("squawks: [")
 	for i, sq := range p.Squawks {
-		buf.WriteString(fmt.Sprintf("%q", sq))
+		buf.WriteString(fmt.Sprintf("%q", sq.value))
 		if i != len(p.Squawks) - 1 {
 			buf.WriteString(", ")
 		}
@@ -75,12 +81,12 @@ func (p *Plane) SetCallSign(cs string) bool {
 
 	// More likely to find a match at the end, so search backwards.
 	for i := len(p.CallSigns) - 1; i >= 0; i-- {
-		if cs == p.CallSigns[i] {
+		if cs == p.CallSigns[i].value {
 			return false
 		}
 	}
 
-	p.CallSigns = append(p.CallSigns, cs)
+	p.CallSigns = append(p.CallSigns, ValuePair{value: cs})
 	return true
 }
 
@@ -93,12 +99,12 @@ func (p *Plane) SetSquawk(s string) bool {
 	}
 
 	for i := len(p.Squawks) - 1; i >= 0; i-- {
-		if s == p.Squawks[i] {
+		if s == p.Squawks[i].value {
 			return false
 		}
 	}
 
-	p.Squawks = append(p.Squawks, s)
+	p.Squawks = append(p.Squawks, ValuePair{value: s})
 	return true
 }
 
@@ -108,7 +114,7 @@ func (p *Plane) SetLocation(lat, lon string, t time.Time) bool {
 	if lat == "" || lon == "" {
 		return false
 	}
-	l := Location{t, lat, lon}
+	l := Location{Time: t, Latitude: lat, Longitude: lon}
 	p.Locations = append(p.Locations, l)
 	return true
 }

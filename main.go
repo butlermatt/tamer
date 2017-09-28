@@ -36,14 +36,23 @@ func main() {
 	msgs := make(chan *message)
 	cmds := make(chan BoardCmd)
 
+	if verbose {
+		fmt.Println("Initalizing databases")
+	}
+	err := init_db()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errors setting up database: %v", err)
+		os.Exit(1)
+	}
+
 	json := StartServer(cmds)
 
 	go connect(msgs)
 
 	for {
 		select {
-		case p := <-msgs:
-			updatePlane(p)
+		case m := <-msgs:
+			updatePlane(m)
 		case cmd := <-cmds:
 			if cmd == ListAll {
 				json <- dumpJson()
@@ -77,8 +86,12 @@ func updatePlane(m *message) {
 
 	pl, ok := planeCache[m.icao]
 	if !ok {
-		pl = new(Plane)
-		pl.Icao = m.icao
+		pl, err := LoadPlane(m.icao)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error loading from database: %v\n", err)
+			pl = &Plane{Icao: m.icao}
+		}
+		fmt.Println(pl)
 		planeCache[pl.Icao] = pl
 	}
 
