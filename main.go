@@ -33,7 +33,7 @@ func init() {
 func main() {
 	flag.Parse()
 
-	msgs := make(chan *planeMsg)
+	msgs := make(chan *message)
 	cmds := make(chan BoardCmd)
 
 	json := StartServer(cmds)
@@ -72,90 +72,90 @@ func dumpJson() string {
 	return buf.String()
 }
 
-func updatePlane(p *planeMsg) {
+func updatePlane(m *message) {
 	buf := bytes.Buffer{}
 
-	pl, ok := planeCache[p.icoa]
+	pl, ok := planeCache[m.icao]
 	if !ok {
 		pl = new(Plane)
-		pl.Icao = p.icoa
+		pl.Icao = m.icao
 		planeCache[pl.Icao] = pl
 	}
 
-	if p.msg.dGen.After(pl.LastSeen) {
-		pl.LastSeen = p.msg.dGen
+	if m.dGen.After(pl.LastSeen) {
+		pl.LastSeen = m.dGen
 	}
 
 	if verbose {
-		buf.WriteString(fmt.Sprintf("%s - %06X -", p.msg.dGen.String(), p.icoa))
+		buf.WriteString(fmt.Sprintf("%s - %06X -", m.dGen.String(), m.icao))
 	}
 
 	var dataStr string
 	var written bool
-	switch p.msg.tType {
+	switch m.tType {
 	case 1:
-		written = pl.SetCallSign(p.msg.callSign)
+		written = pl.SetCallSign(m.callSign)
 		if verbose {
-			dataStr = fmt.Sprintf(" Callsign: %q", p.msg.callSign)
+			dataStr = fmt.Sprintf(" Callsign: %q", m.callSign)
 		}
 	case 2:
-		written = pl.SetAltitude(p.msg.altitude) || written
-		written = pl.SetSpeed(p.msg.groundSpeed) || written
-		written = pl.SetTrack(p.msg.track) || written
-		written = pl.SetLocation(p.msg.latitude, p.msg.longitude, p.msg.dGen) || written
-		written = pl.SetOnGround(p.msg.onGround) || written
+		written = pl.SetAltitude(m.altitude) || written
+		written = pl.SetSpeed(m.groundSpeed) || written
+		written = pl.SetTrack(m.track) || written
+		written = pl.SetLocation(m.latitude, m.longitude, m.dGen) || written
+		written = pl.SetOnGround(m.onGround) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", p.msg.altitude, p.msg.groundSpeed, p.msg.track, p.msg.latitude, p.msg.longitude)
+			dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", m.altitude, m.groundSpeed, m.track, m.latitude, m.longitude)
 		}
 	case 3:
-		written = pl.SetAltitude(p.msg.altitude) || written
-		written = pl.SetLocation(p.msg.latitude, p.msg.longitude, p.msg.dGen) || written
-		written = pl.SetSquawkCh(p.msg.squawkCh) || written
-		written = pl.SetEmergency(p.msg.emergency) || written
-		written = pl.SetIdent(p.msg.ident) || written
-		written = pl.SetOnGround(p.msg.onGround) || written
+		written = pl.SetAltitude(m.altitude) || written
+		written = pl.SetLocation(m.latitude, m.longitude, m.dGen) || written
+		written = pl.SetSquawkCh(m.squawkCh) || written
+		written = pl.SetEmergency(m.emergency) || written
+		written = pl.SetIdent(m.ident) || written
+		written = pl.SetOnGround(m.onGround) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", p.msg.altitude, p.msg.latitude, p.msg.longitude)
+			dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", m.altitude, m.latitude, m.longitude)
 		}
 	case 4:
-		written = pl.SetSpeed(p.msg.groundSpeed) || written
-		written = pl.SetTrack(p.msg.track) || written
-		written = pl.SetVertical(p.msg.vertical) || written
+		written = pl.SetSpeed(m.groundSpeed) || written
+		written = pl.SetTrack(m.track) || written
+		written = pl.SetVertical(m.vertical) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" Speed: %.2f, Track: %.2f, Vertical Rate: %d", p.msg.groundSpeed, p.msg.track, p.msg.vertical)
+			dataStr = fmt.Sprintf(" Speed: %.2f, Track: %.2f, Vertical Rate: %d", m.groundSpeed, m.track, m.vertical)
 		}
 	case 5:
-		written = pl.SetAltitude(p.msg.altitude) || written
-		written = pl.SetSquawkCh(p.msg.squawkCh) || written
-		written = pl.SetIdent(p.msg.ident) || written
-		written = pl.SetOnGround(p.msg.onGround) || written
+		written = pl.SetAltitude(m.altitude) || written
+		written = pl.SetSquawkCh(m.squawkCh) || written
+		written = pl.SetIdent(m.ident) || written
+		written = pl.SetOnGround(m.onGround) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+			dataStr = fmt.Sprintf(" Altitude: %d", m.altitude)
 		}
 	case 6:
-		written = pl.SetAltitude(p.msg.altitude) || written
-		written = pl.SetSquawk(p.msg.squawk) || written
-		written = pl.SetSquawkCh(p.msg.squawkCh) || written
-		written = pl.SetEmergency(p.msg.emergency) || written
-		written = pl.SetIdent(p.msg.ident) || written
-		written = pl.SetOnGround(p.msg.onGround) || written
+		written = pl.SetAltitude(m.altitude) || written
+		written = pl.SetSquawk(m.squawk) || written
+		written = pl.SetSquawkCh(m.squawkCh) || written
+		written = pl.SetEmergency(m.emergency) || written
+		written = pl.SetIdent(m.ident) || written
+		written = pl.SetOnGround(m.onGround) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d, SquawkCode: %q", p.msg.altitude, p.msg.squawk)
+			dataStr = fmt.Sprintf(" Altitude: %d, SquawkCode: %q", m.altitude, m.squawk)
 		}
 	case 7:
-		written = pl.SetAltitude(p.msg.altitude) || written
-		written = pl.SetOnGround(p.msg.onGround) || written
+		written = pl.SetAltitude(m.altitude) || written
+		written = pl.SetOnGround(m.onGround) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d", p.msg.altitude)
+			dataStr = fmt.Sprintf(" Altitude: %d", m.altitude)
 		}
 	case 8:
-		written = pl.SetOnGround(p.msg.onGround) || written
+		written = pl.SetOnGround(m.onGround) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" OnGround: %v", p.msg.onGround)
+			dataStr = fmt.Sprintf(" OnGround: %v", m.onGround)
 		}
 	}
 	if written {
-		pl.SetHistory(p.msg)
+		pl.SetHistory(m)
 	}
 
 	if verbose {
@@ -166,7 +166,7 @@ func updatePlane(p *planeMsg) {
 	}
 }
 
-func connect(out chan<- *planeMsg) {
+func connect(out chan<- *message) {
 	i := 1
 	for {
 		conn, err := net.Dial("tcp", addr)

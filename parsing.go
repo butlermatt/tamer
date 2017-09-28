@@ -37,7 +37,7 @@ const (
 	onGround     // Flag to indicate ground squawk switch is active
 )
 
-func parseMessage(m []byte, out chan<- *planeMsg) {
+func parseMessage(m []byte, out chan<- *message) {
 	parts := bytes.Split(m, []byte{','})
 	if len(parts) != 22 {
 		if verbose {
@@ -66,21 +66,17 @@ func parseMessage(m []byte, out chan<- *planeMsg) {
 		fmt.Fprintf(os.Stderr, "Error converting transmission type (only on msg fields?). %q, error: %v", parts[tType], err)
 	}
 
-	p, err := parseMsgType(parts, ttype)
+	msg, err := parseMsgType(parts, ttype)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error trying to decode message. %v", err)
 		return
 	}
 
-	out <- p
-}
-
-type planeMsg struct {
-	icoa uint
-	msg  *message
+	out <- msg
 }
 
 type message struct {
+	icao        uint
 	tType       int
 	dGen        time.Time
 	dRec        time.Time
@@ -142,7 +138,7 @@ func parseBool(b []byte) bool {
 	return bb
 }
 
-func parseMsgType(msg [][]byte, tt int) (*planeMsg, error) {
+func parseMsgType(msg [][]byte, tt int) (*message, error) {
 	// Based on information from http://woodair.net/sbs/Article/Barebones42_Socket_Data.htm
 
 	sentTime, err := parseTime(string(msg[dGen]), string(msg[tGen]))
@@ -160,8 +156,7 @@ func parseMsgType(msg [][]byte, tt int) (*planeMsg, error) {
 		return nil, errors.Wrap(err, "unable to parse icao hex")
 	}
 
-	m := &message{tType: tt, dGen: sentTime, dRec: recvTime}
-	p := &planeMsg{icoa: uint(icaoDec), msg: m}
+	m := &message{icao: uint(icaoDec), tType: tt, dGen: sentTime, dRec: recvTime}
 
 	switch tt {
 	case 1:
@@ -204,5 +199,5 @@ func parseMsgType(msg [][]byte, tt int) (*planeMsg, error) {
 		m.onGround = parseBool(msg[onGround])
 	}
 
-	return p, nil
+	return m, nil
 }
