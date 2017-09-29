@@ -62,14 +62,7 @@ func main() {
 		case m := <-msgs:
 			updatePlane(m)
 		case cmd := <-cmds:
-			switch cmd {
-			case ListCurrent:
-				json <- dumpJson()
-			case ListAll:
-				json <- getAllPlanes()
-			default:
-				fmt.Fprintf(os.Stderr, "unknown command: %v", cmd)
-			}
+			json <- handleCommand(cmd)
 		case t := <-tick.C:
 			saveData(t)
 		case <-sigint:
@@ -89,6 +82,45 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error closing database: %#v", err)
 	}
 	os.Exit(0)
+}
+
+func handleCommand(cmd BoardCmd) string {
+	switch cmd {
+	case ListCurrent:
+		return dumpJson()
+	case ListAll:
+		return getAllPlanes()
+	}
+
+	if cmd < BoardCmd(10) {
+		return "" // Empty for unknown command right now.
+	}
+
+	icao := uint(cmd)
+	pl, ok := planeCache[icao]
+	var err error
+	if !ok {
+		pl, err = LoadPlane(icao)
+		if err != nil {
+			return ""
+		}
+	}
+
+	LoadLocations(pl)
+	var buf bytes.Buffer
+	buf.WriteString("{plane: ")
+	buf.WriteString(pl.ToJson())
+	buf.WriteString(",\nlocations: [")
+
+	locs := make([]string, len(pl.Locations))
+	i := 0
+	for _, l := range pl.Locations {
+		locs[i] = fmt.Sprintf("{location: \"%s,%s\", time: %q}", l.Latitude, l.Longitude, l.Time.String())
+		i++
+	}
+	buf.WriteString(strings.Join(locs, ","))
+	buf.WriteString("]}")
+	return buf.String()
 }
 
 func saveData(t time.Time) {
@@ -181,7 +213,7 @@ func updatePlane(m *message) {
 	var err error
 	if !ok {
 		pl, err = LoadPlane(m.icao)
-		if err != nil {
+		if err != nil && err != planeNotFound {
 			fmt.Fprintf(os.Stderr, "error loading from database: %v\n", err)
 			pl = &Plane{Icao: m.icao}
 		}

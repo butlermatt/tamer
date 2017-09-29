@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 type BoardCmd int
@@ -22,24 +23,29 @@ type Server struct {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Request: ", r.URL)
 
-	switch r.URL.Path {
-	case "/favicon.ico":
+	if r.URL.Path == "/favicon.ico" {
 		w.WriteHeader(http.StatusNotFound)
 		return
-	case "/":
-		s.listCurrent(w, r)
-	case "/All":
-		s.listAll(w, r)
-	default:
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Not found."))
+	} else if r.URL.Path == "/" {
+		s.cmd <- ListCurrent
+		s.writeResponse(<-s.json, w)
+	} else if r.URL.Path == "/All" || r.URL.Path == "/all" {
+		s.cmd <- ListAll
+		s.writeResponse(<-s.json, w)
+	} else {
+		icaoStr := r.URL.Path[1:]
+		icao, err := strconv.ParseUint(icaoStr, 16, 0)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("Not found."))
+			return
+		}
+		s.cmd <- BoardCmd(icao)
+		s.writeResponse(<-s.json, w)
 	}
 }
 
-func (s *Server) listCurrent(w http.ResponseWriter, r *http.Request) {
-	s.cmd <- ListCurrent
-	resp := <-s.json
-
+func (s *Server) writeResponse(resp string, w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
 	buf := bufio.NewWriter(w)
@@ -51,24 +57,6 @@ func (s *Server) listCurrent(w http.ResponseWriter, r *http.Request) {
 	err = buf.Flush()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error writing response: %v", err)
-	}
-}
-
-func (s *Server) listAll(w http.ResponseWriter, r *http.Request) {
-	s.cmd <- ListAll
-	resp := <-s.json
-
-	h := w.Header()
-	h.Set("Content-Type", "application/json")
-	buf := bufio.NewWriter(w)
-	_, err := buf.WriteString(resp)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error writing response: %v", err)
-	}
-
-	err = buf.Flush()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error flushing response: %v", err)
 	}
 }
 

@@ -10,9 +10,9 @@ import (
 )
 
 // Locations
-// +--------------------------------------------------+
-// | RowID | ICAO (i) | Lat (s) | Lon (s) | TimeStamp |
-// +--------------------------------------------------+
+// +-------------------------------------------------+
+// | RowID | ICAO (i) | Lat (s) | Lon (s) | time (i) |
+// +-------------------------------------------------+
 const (
 	createLocationTable = `
 CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat TEXT, lon TEXT, time INTEGER)
@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS Planes (icao INTEGER PRIMARY KEY, altitude INTEGER, t
 	queryAllPlanes = `SELECT icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes `
 
 )
+
+var planeNotFound = errors.New("plane not found")
 
 var db *sql.DB
 
@@ -153,7 +155,7 @@ func LoadPlane(icao uint) (*Plane, error) {
 	err = tx.QueryRow(queryPlane, int(icao)).Scan(&p.Altitude, &p.Track, &p.Speed, &p.Vertical, &tt, &p.SquawkCh, &p.Emergency, &p.Ident, &p.OnGround)
 	if err == sql.ErrNoRows {
 		fmt.Printf("Unable to find plane: %06X in the db.\n", icao)
-		return p, nil
+		return p, planeNotFound
 	} else if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to load plane %06X", icao))
 	}
@@ -212,6 +214,31 @@ func LoadCallsigns(p *Plane, tx *sql.Tx) error {
 	}
 	if err = rows.Err(); err != nil {
 		return errors.Wrap(err, "error iterating over results of callsigns.")
+	}
+
+	return nil
+}
+
+func LoadLocations(p *Plane) error {
+	rows, err := db.Query(`SELECT lat, lon, time FROM Locations WHERE icao = ? ORDER BY time ASC`, int(p.Icao))
+	if err != nil {
+		return errors.Wrap(err, "unable to load locations")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var l Location
+		var tt int64
+		err = rows.Scan(&l.Latitude, &l.Longitude, &tt)
+		if err != nil {
+			return errors.Wrap(err, "unable to load values from Locations table")
+		}
+		l.Time = time.Unix(0, tt)
+		p.Locations = append(p.Locations, l)
+	}
+
+	if err = rows.Err(); err != nil {
+		return errors.Wrap(err, "error iterating over Location rows")
 	}
 
 	return nil
