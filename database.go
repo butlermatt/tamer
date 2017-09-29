@@ -13,7 +13,6 @@ import (
 // | RowID | ICAO (i) | Lat (s) | Lon (s) | TimeStamp |
 // +--------------------------------------------------+
 const (
-	locationTable = `Locations`
 	createLocationTable = `
 CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat TEXT, lon TEXT, time INTEGER)
 `
@@ -24,7 +23,6 @@ CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat TEXT, lon TEXT,
 // | RowID | ICAO (i) | TimeStamp | CallSign (s) | Altitude (i) | Track (f) | Speed (f) | vertical (i) | Lat (s) | lon (s) | Squawk (s) | SqCh (b) | Emerg (b) | Ident (b) | Grnd (b) |
 // +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 const (
-	msgsTable = `Messages`
 	createMsgsTable = `
 CREATE TABLE IF NOT EXISTS Messages (icao INTEGER NOT NULL, time INTEGER, callsign TEXT, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lat TEXT, lon TEXT, squawk TEXT, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
 `
@@ -35,7 +33,6 @@ CREATE TABLE IF NOT EXISTS Messages (icao INTEGER NOT NULL, time INTEGER, callsi
 // | RowID | ICAO (i) | Squawk (s) |
 // +-------------------------------+
 const (
-	squawksTable = `Squawks`
 	createSquawksTable = `
 CREATE TABLE IF NOT EXISTS Squawks (icao INTEGER NOT NULL, squawk TEXT)
 `
@@ -46,7 +43,6 @@ CREATE TABLE IF NOT EXISTS Squawks (icao INTEGER NOT NULL, squawk TEXT)
 // | RowID | ICAO (i) | CallSign (s) |
 // +---------------------------------+
 const (
-	callSignsTable = `Callsigns`
 	createCallsignsTable = `
 CREATE TABLE IF NOT EXISTS Callsigns (icao INTEGER NOT NULL, callsign TEXT)
 `
@@ -57,7 +53,6 @@ CREATE TABLE IF NOT EXISTS Callsigns (icao INTEGER NOT NULL, callsign TEXT)
 // | ICAO (i) Primary Key | Altitude (i) | Track (f) | Speed (f) | Vertical (i) | LastSeen (int) | SqCh (b) | Emerg (b) | Ident (b) | Grnd (b) |
 // +------------------------------------------------------------------------------------------------------------------------------------------+
 const (
-	planeTable = `Planes`
 	createPlaneTable = `
 CREATE TABLE IF NOT EXISTS Planes (icao INTEGER PRIMARY KEY, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lastSeen INTEGER, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
 `

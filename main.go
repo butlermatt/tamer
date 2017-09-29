@@ -69,6 +69,10 @@ func main() {
 }
 
 func saveData(t time.Time) {
+	if len(planeCache) == 0 {
+		return
+	}
+
 	toSave := make([]*Plane, len(planeCache))
 	period := t.Add(-savePeriod)
 
