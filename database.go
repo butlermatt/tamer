@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"fmt"
 	"os"
+	"time"
 )
 
 // Locations
@@ -93,15 +94,18 @@ func init_db() error {
 }
 
 func LoadPlane(icao uint) (*Plane, error) {
+	var tt int64
 	p := &Plane{Icao: icao}
-	err := db.QueryRow(loadPlaneQuery, int(icao)).Scan(&p.Altitude, &p.Track, &p.Speed, &p.Vertical, &p.LastSeen, &p.SquawkCh, &p.Emergency, &p.Ident, &p.OnGround)
 
+	err := db.QueryRow(loadPlaneQuery, int(icao)).Scan(&p.Altitude, &p.Track, &p.Speed, &p.Vertical, &tt, &p.SquawkCh, &p.Emergency, &p.Ident, &p.OnGround)
 	if err == sql.ErrNoRows {
 		fmt.Printf("Unable to find plane: %06X in the db.\n", icao)
 		return p, nil
 	} else if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("unable to load plane %06X", icao))
 	}
+
+	p.LastSeen = time.Unix(0, tt)
 
 	fmt.Println("Found plane in DB. Loading other values")
 	err = LoadSquawks(p)
