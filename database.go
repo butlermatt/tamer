@@ -191,6 +191,7 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		return err
 	}
 	for _, pl := range planes {
+		fmt.Printf("Saving Plane: %06X\n", pl.Icao)
 		_, err = plSt.Exec(int(pl.Icao), pl.Altitude, pl.Track, pl.Speed, pl.Vertical, pl.LastSeen.UnixNano(), pl.SquawkCh, pl.Emergency, pl.Ident, pl.OnGround)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error writing plane: %#v", err)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 )
@@ -39,6 +40,8 @@ func main() {
 
 	msgs := make(chan *message, 50)
 	cmds := make(chan BoardCmd)
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, os.Interrupt)
 
 	if verbose {
 		fmt.Println("Initalizing databases")
@@ -64,6 +67,9 @@ func main() {
 			}
 		case t := <-tick.C:
 			saveData(t)
+		case <-sigint:
+			saveData(time.Time{})
+			break
 		}
 	}
 }
@@ -73,15 +79,25 @@ func saveData(t time.Time) {
 		return
 	}
 
-	toSave := make([]*Plane, len(planeCache))
-	period := t.Add(-savePeriod)
-
 	i := 0
-	for icao, pl := range planeCache {
-		if period.After(pl.LastSeen) {
+	toSave := make([]*Plane, len(planeCache))
+
+	var zero time.Time
+	if t == zero { // Save all planes if time 0. Probably an interrupt received.
+		for icao, pl := range planeCache {
 			toSave[i] = pl
 			delete(planeCache, icao)
 			i++
+		}
+	} else {
+		period := t.Add(-savePeriod)
+
+		for icao, pl := range planeCache {
+			if period.After(pl.LastSeen) {
+				toSave[i] = pl
+				delete(planeCache, icao)
+				i++
+			}
 		}
 	}
 
