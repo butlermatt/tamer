@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	savePeriod time.Duration = time.Second * 5
+	savePeriod time.Duration = time.Minute * 1
 )
 
 var (
@@ -37,7 +37,7 @@ func init() {
 func main() {
 	flag.Parse()
 
-	msgs := make(chan *message)
+	msgs := make(chan *message, 50)
 	cmds := make(chan BoardCmd)
 
 	if verbose {

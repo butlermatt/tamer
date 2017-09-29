@@ -14,8 +14,8 @@ type Location struct {
 }
 
 type ValuePair struct {
-	id    int
-	value string
+	loaded bool
+	value  string
 }
 
 // TODO: Don't change a value (or add squawk etc) if it already exists with that value.

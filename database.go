@@ -5,6 +5,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"fmt"
+	"os"
 )
 
 // Locations
@@ -25,7 +26,7 @@ CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat TEXT, lon TEXT,
 const (
 	msgsTable = `Messages`
 	createMsgsTable = `
-CREATE TABLE IF NOT EXISTS Messages (icao INTEGER NOT NULL, time INTEGER, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lat TEXT, lon TEXT, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
+CREATE TABLE IF NOT EXISTS Messages (icao INTEGER NOT NULL, time INTEGER, callsign TEXT, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lat TEXT, lon TEXT, squawk TEXT, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
 `
 )
 
@@ -121,15 +122,15 @@ func LoadPlane(icao uint) (*Plane, error) {
 }
 
 func LoadSquawks(p *Plane) error {
-	rows, err := db.Query("SELECT ROWID, squawk FROM Squawks WHERE icao = ?", int(p.Icao))
+	rows, err := db.Query("SELECT squawk FROM Squawks WHERE icao = ?", int(p.Icao))
 	if err != nil {
 		return errors.Wrap(err, "error retrieving Squawks")
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var sw ValuePair
-		err = rows.Scan(&sw.id, &sw.value)
+		sw := ValuePair{loaded: true}
+		err = rows.Scan(&sw.value)
 		if err != nil {
 			return errors.Wrap(err, "error reading values from row in Squawk table")
 		}
@@ -140,25 +141,120 @@ func LoadSquawks(p *Plane) error {
 }
 
 func LoadCallsigns(p *Plane) error {
-	rows, err := db.Query("SELECT ROWID, callsign FROM Callsigns WHERE icao = ?", int(p.Icao))
+	rows, err := db.Query("SELECT callsign FROM Callsigns WHERE icao = ?", int(p.Icao))
 	if err != nil {
 		return errors.Wrap(err, "error retrieving Callsigns")
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var cs ValuePair
-		err = rows.Scan(&cs.id, &cs.value)
+		cs := ValuePair{loaded: true}
+		err = rows.Scan(&cs.value)
 		if err != nil {
 			return errors.Wrap(err, "error reading values from row in Callsigns table")
 		}
 		p.CallSigns = append(p.CallSigns, cs)
+	}
+	if err = rows.Err(); err != nil {
+		return errors.Wrap(err, "error iterating over results.")
 	}
 
 	return nil
 }
 
 func SavePlanes(planes []*Plane) error {
-	// TODO: This
-	return fmt.Errorf("Not yet implemented! %#v", planes)
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	//icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd
+	plSt, err := tx.Prepare(`INSERT OR REPLACE INTO Planes(icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	csSt, err := tx.Prepare(`INSERT INTO Callsigns(icao, callsign) VALUES(?, ?)`)
+	if err != nil {
+		return err
+	}
+	sqSt, err := tx.Prepare(`INSERT INTO Squawks(icao, squawk) VALUES(?, ?)`)
+	if err != nil {
+		return err
+	}
+	lcSt, err := tx.Prepare(`INSERT INTO Locations(icao, lat, lon, time) VALUES(?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	msgSt, err := tx.Prepare(`INSERT INTO Messages(icao, time, callsign, altitude, track, speed, vertical, lat, lon, squawk, sqch, emerg, ident, grnd)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	for _, pl := range planes {
+		_, err = plSt.Exec(int(pl.Icao), pl.Altitude, pl.Track, pl.Speed, pl.Vertical, pl.LastSeen.UnixNano(), pl.SquawkCh, pl.Emergency, pl.Ident, pl.OnGround)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error writing plane: %#v", err)
+		}
+
+		for _, cs := range pl.CallSigns {
+			if !cs.loaded {
+				_, err = csSt.Exec(int(pl.Icao), cs.value)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error writing callsign: %#v", err)
+				}
+			}
+		}
+
+		for _, sq := range pl.Squawks {
+			if !sq.loaded {
+				_, err = sqSt.Exec(int(pl.Icao), sq.value)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error writing squawk: %#v", err)
+				}
+			}
+		}
+
+		for _, lc := range pl.Locations {
+			_, err = lcSt.Exec(int(pl.Icao), lc.Latitude, lc.Longitude, lc.Time.UnixNano())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error writing location: %#v", err)
+			}
+		}
+
+		for _, msg := range pl.History {
+			_, err = msgSt.Exec(int(msg.icao), msg.dGen.UnixNano(), msg.callSign, msg.altitude, msg.track, msg.groundSpeed, msg.vertical, msg.latitude, msg.longitude, msg.squawk, msg.squawkCh, msg.emergency, msg.ident, msg.onGround)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error writing message: %#v", err)
+			}
+		}
+	}
+
+	err = sqSt.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing squawk statement: %#v\n", err)
+	}
+	err = csSt.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing callsign statement: %#v\n", err)
+	}
+	err = lcSt.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing location statement: %#v\n", err)
+	}
+	err = plSt.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing plane statement: %#v\n", err)
+	}
+	err = lcSt.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing locations statement: %#v\n", err)
+	}
+	err = msgSt.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing messages statement: %#v", err)
+	}
+
+	err = tx.Commit()
+	return err
 }
