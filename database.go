@@ -57,7 +57,9 @@ const (
 	createPlaneTable = `
 CREATE TABLE IF NOT EXISTS Planes (icao INTEGER PRIMARY KEY, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lastSeen INTEGER, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
 `
-	loadPlaneQuery = `SELECT altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes WHERE icao = ?`
+	queryPlane = `SELECT altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes WHERE icao = ?`
+	queryAllPlanes = `SELECT icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes `
+
 )
 
 var db *sql.DB
@@ -99,11 +101,56 @@ func close_db() error {
 	return err
 }
 
+func LoadAll() ([]*Plane, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to begin transaction")
+	}
+	defer tx.Commit()
+
+	rows, err := tx.Query(queryAllPlanes)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to query planes")
+	}
+	defer rows.Close()
+
+	var planes []*Plane
+
+	for rows.Next() {
+		p := new(Plane)
+		var tt int64
+		var icao int
+		err = rows.Scan(&icao, &p.Altitude, &p.Track, &p.Speed, &p.Vertical, &tt, &p.SquawkCh, &p.Emergency, &p.Ident, &p.OnGround)
+		if err != nil {
+			return nil, errors.Wrap(err, "error loading values of planes.")
+		}
+		p.Icao = uint(icao)
+		p.LastSeen = time.Unix(0, tt)
+		err = LoadCallsigns(p, tx)
+		if err != nil {
+			return nil, err
+		}
+		err = LoadSquawks(p, tx)
+		if err != nil {
+			return nil, err
+		}
+		planes = append(planes, p)
+	}
+
+	return planes, nil
+}
+
 func LoadPlane(icao uint) (*Plane, error) {
 	var tt int64
 	p := &Plane{Icao: icao}
 
-	err := db.QueryRow(loadPlaneQuery, int(icao)).Scan(&p.Altitude, &p.Track, &p.Speed, &p.Vertical, &tt, &p.SquawkCh, &p.Emergency, &p.Ident, &p.OnGround)
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to start transaction")
+	}
+	defer tx.Commit()
+
+	err = tx.QueryRow(queryPlane, int(icao)).Scan(&p.Altitude, &p.Track, &p.Speed, &p.Vertical, &tt, &p.SquawkCh, &p.Emergency, &p.Ident, &p.OnGround)
 	if err == sql.ErrNoRows {
 		fmt.Printf("Unable to find plane: %06X in the db.\n", icao)
 		return p, nil
@@ -114,11 +161,11 @@ func LoadPlane(icao uint) (*Plane, error) {
 	p.LastSeen = time.Unix(0, tt)
 
 	fmt.Println("Found plane in DB. Loading other values")
-	err = LoadSquawks(p)
+	err = LoadSquawks(p, tx)
 	if err != nil {
 		return nil, err
 	}
-	err = LoadCallsigns(p)
+	err = LoadCallsigns(p, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +173,8 @@ func LoadPlane(icao uint) (*Plane, error) {
 	return p, nil
 }
 
-func LoadSquawks(p *Plane) error {
-	rows, err := db.Query("SELECT squawk FROM Squawks WHERE icao = ?", int(p.Icao))
+func LoadSquawks(p *Plane, tx *sql.Tx) error {
+	rows, err := tx.Query("SELECT squawk FROM Squawks WHERE icao = ?", int(p.Icao))
 	if err != nil {
 		return errors.Wrap(err, "error retrieving Squawks")
 	}
@@ -141,12 +188,15 @@ func LoadSquawks(p *Plane) error {
 		}
 		p.Squawks = append(p.Squawks, sw)
 	}
+	if err = rows.Err(); err != nil {
+		return errors.Wrap(err, "error iterating over results of squawks.")
+	}
 
 	return nil
 }
 
-func LoadCallsigns(p *Plane) error {
-	rows, err := db.Query("SELECT callsign FROM Callsigns WHERE icao = ?", int(p.Icao))
+func LoadCallsigns(p *Plane, tx *sql.Tx) error {
+	rows, err := tx.Query("SELECT callsign FROM Callsigns WHERE icao = ?", int(p.Icao))
 	if err != nil {
 		return errors.Wrap(err, "error retrieving Callsigns")
 	}
@@ -161,7 +211,7 @@ func LoadCallsigns(p *Plane) error {
 		p.CallSigns = append(p.CallSigns, cs)
 	}
 	if err = rows.Err(); err != nil {
-		return errors.Wrap(err, "error iterating over results.")
+		return errors.Wrap(err, "error iterating over results of callsigns.")
 	}
 
 	return nil

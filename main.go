@@ -62,8 +62,13 @@ func main() {
 		case m := <-msgs:
 			updatePlane(m)
 		case cmd := <-cmds:
-			if cmd == ListAll {
+			switch cmd {
+			case ListCurrent:
 				json <- dumpJson()
+			case ListAll:
+				json <- getAllPlanes()
+			default:
+				fmt.Fprintf(os.Stderr, "unknown command: %v", cmd)
 			}
 		case t := <-tick.C:
 			saveData(t)
@@ -140,6 +145,29 @@ func dumpJson() string {
 	buf.WriteString(strings.Join(sl, ",\n"))
 
 	buf.WriteString("]")
+	return buf.String()
+}
+
+func getAllPlanes() string {
+	buf := bytes.Buffer{}
+
+	buf.WriteString("{current: ")
+	buf.WriteString(dumpJson())
+
+	buf.WriteString(",\npast: [")
+
+	planes, err := LoadAll()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading planes: %v\n", err)
+		return "[]"
+	}
+	sl := make([]string, len(planes))
+	for i, pl := range planes {
+		sl[i] = pl.ToJson()
+	}
+
+	buf.WriteString(strings.Join(sl, ",\n"))
+	buf.WriteString("] }")
 	return buf.String()
 }
 
@@ -245,7 +273,7 @@ func updatePlane(m *message) {
 }
 
 func connect(out chan<- *message) {
-	i := 1
+	i := 5
 	for {
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
@@ -255,7 +283,7 @@ func connect(out chan<- *message) {
 			i += i
 			continue
 		}
-		i = 1
+		i = 5
 		fmt.Println("Connected")
 		reader := bufio.NewReader(conn)
 		for b, err := reader.ReadBytes('\n'); err == nil; b, err = reader.ReadBytes('\n') {
