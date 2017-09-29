@@ -122,7 +122,7 @@ func (p *Plane) SetLocation(lat, lon string, t time.Time) bool {
 // SetAltitude will update the altitude if different from existing altitude.
 // Returns true if successful, false if there is no change.
 func (p *Plane) SetAltitude(a int) bool {
-	if p.Altitude != a {
+	if a != 0 && p.Altitude != a {
 		p.Altitude = a
 		return true
 	}
