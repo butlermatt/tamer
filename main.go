@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+const (
+	savePeriod time.Duration = time.Second * 5
+)
+
 var (
 	// Command line flags
 	addr        string
@@ -46,6 +50,7 @@ func main() {
 	}
 
 	json := StartServer(cmds)
+	tick := time.NewTicker(savePeriod)
 
 	go connect(msgs)
 
@@ -57,7 +62,32 @@ func main() {
 			if cmd == ListAll {
 				json <- dumpJson()
 			}
+		case t := <-tick.C:
+			saveData(t)
 		}
+	}
+}
+
+func saveData(t time.Time) {
+	toSave := make([]*Plane, len(planeCache))
+	period := t.Add(-savePeriod)
+
+	i := 0
+	for icao, pl := range planeCache {
+		if period.After(pl.LastSeen) {
+			toSave[i] = pl
+			delete(planeCache, icao)
+			i++
+		}
+	}
+
+	if i == 0 {
+		return
+	}
+
+	err := SavePlanes(toSave)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error saving planes to database: %v\n", err)
 	}
 }
 
@@ -85,13 +115,13 @@ func updatePlane(m *message) {
 	buf := bytes.Buffer{}
 
 	pl, ok := planeCache[m.icao]
+	var err error
 	if !ok {
-		pl, err := LoadPlane(m.icao)
+		pl, err = LoadPlane(m.icao)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error loading from database: %v\n", err)
 			pl = &Plane{Icao: m.icao}
 		}
-		fmt.Println(pl)
 		planeCache[pl.Icao] = pl
 	}
 

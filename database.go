@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS Squawks (icao INTEGER NOT NULL, squawk TEXT)
 // | RowID | ICAO (i) | CallSign (s) |
 // +---------------------------------+
 const (
-	callSignsTable = `Planes`
+	callSignsTable = `Callsigns`
 	createCallsignsTable = `
 CREATE TABLE IF NOT EXISTS Callsigns (icao INTEGER NOT NULL, callsign TEXT)
 `
@@ -112,6 +112,10 @@ func LoadPlane(icao uint) (*Plane, error) {
 	if err != nil {
 		return nil, err
 	}
+	err = LoadCallsigns(p)
+	if err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }
@@ -133,4 +137,28 @@ func LoadSquawks(p *Plane) error {
 	}
 
 	return nil
+}
+
+func LoadCallsigns(p *Plane) error {
+	rows, err := db.Query("SELECT ROWID, callsign FROM Callsigns WHERE icao = ?", int(p.Icao))
+	if err != nil {
+		return errors.Wrap(err, "error retrieving Callsigns")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cs ValuePair
+		err = rows.Scan(&cs.id, &cs.value)
+		if err != nil {
+			return errors.Wrap(err, "error reading values from row in Callsigns table")
+		}
+		p.CallSigns = append(p.CallSigns, cs)
+	}
+
+	return nil
+}
+
+func SavePlanes(planes []*Plane) error {
+	// TODO: This
+	return fmt.Errorf("Not yet implemented! %#v", planes)
 }
