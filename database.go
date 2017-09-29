@@ -93,6 +93,12 @@ func init_db() error {
 	return nil
 }
 
+func close_db() error {
+	err := db.Close()
+
+	return err
+}
+
 func LoadPlane(icao uint) (*Plane, error) {
 	var tt int64
 	p := &Plane{Icao: icao}
@@ -191,7 +197,12 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		return err
 	}
 	for _, pl := range planes {
-		fmt.Printf("Saving Plane: %06X\n", pl.Icao)
+		if pl == nil {
+			continue
+		}
+		if verbose {
+			fmt.Printf("Saving Plane: %06X\n", pl.Icao)
+		}
 		_, err = plSt.Exec(int(pl.Icao), pl.Altitude, pl.Track, pl.Speed, pl.Vertical, pl.LastSeen.UnixNano(), pl.SquawkCh, pl.Emergency, pl.Ident, pl.OnGround)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error writing plane: %#v", err)

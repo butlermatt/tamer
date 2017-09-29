@@ -69,9 +69,21 @@ func main() {
 			saveData(t)
 		case <-sigint:
 			saveData(time.Time{})
-			break
+			err = close_db()
+			tick.Stop()
+			close(cmds)
+			cmds = nil
+			close(json)
+			close(msgs)
+			msgs = nil
+			os.Exit(0)
 		}
 	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error closing database: %#v", err)
+	}
+	os.Exit(0)
 }
 
 func saveData(t time.Time) {
@@ -79,11 +91,12 @@ func saveData(t time.Time) {
 		return
 	}
 
-	i := 0
-	toSave := make([]*Plane, len(planeCache))
+	var toSave []*Plane
 
 	var zero time.Time
 	if t == zero { // Save all planes if time 0. Probably an interrupt received.
+		i := 0
+		toSave = make([]*Plane, len(planeCache))
 		for icao, pl := range planeCache {
 			toSave[i] = pl
 			delete(planeCache, icao)
@@ -94,14 +107,13 @@ func saveData(t time.Time) {
 
 		for icao, pl := range planeCache {
 			if period.After(pl.LastSeen) {
-				toSave[i] = pl
+				toSave = append(toSave, pl)
 				delete(planeCache, icao)
-				i++
 			}
 		}
 	}
 
-	if i == 0 {
+	if len(toSave) == 0 {
 		return
 	}
 
@@ -133,6 +145,9 @@ func dumpJson() string {
 
 func updatePlane(m *message) {
 	buf := bytes.Buffer{}
+	if m == nil {
+		return
+	}
 
 	pl, ok := planeCache[m.icao]
 	var err error
