@@ -60,7 +60,8 @@ func main() {
 	for {
 		select {
 		case m := <-msgs:
-			updatePlane(m)
+			pl, _ := getPlaneByIcao(m.icao)
+			updatePlane(m, pl)
 		case cmd := <-cmds:
 			json <- handleCommand(cmd)
 		case t := <-tick.C:
@@ -84,10 +85,28 @@ func main() {
 	os.Exit(0)
 }
 
+func getPlaneByIcao(icao uint) (*Plane, error) {
+	pl, ok := planeCache[icao]
+	var err error
+	if !ok {
+		pl, err = LoadPlane(icao)
+		if err != nil && err != planeNotFound {
+			fmt.Fprintf(os.Stderr, "error loading from database: %v\n", err)
+			pl = &Plane{Icao: icao}
+		}
+		planeCache[pl.Icao] = pl
+		if err != nil {
+			return pl, planeNotFound
+		}
+	}
+
+	return pl, nil
+}
+
 func handleCommand(cmd BoardCmd) string {
 	switch cmd {
 	case ListCurrent:
-		return dumpJson()
+		return currentPlanes()
 	case ListAll:
 		return getAllPlanes()
 	}
@@ -97,13 +116,13 @@ func handleCommand(cmd BoardCmd) string {
 	}
 
 	icao := uint(cmd)
-	pl, ok := planeCache[icao]
-	var err error
-	if !ok {
-		pl, err = LoadPlane(icao)
-		if err != nil {
-			return ""
-		}
+	return detailedPlane(icao)
+}
+
+func detailedPlane(icao uint) string {
+	pl, err := getPlaneByIcao(icao)
+	if err != nil {
+		return ""
 	}
 
 	LoadLocations(pl)
@@ -160,7 +179,7 @@ func saveData(t time.Time) {
 	}
 }
 
-func dumpJson() string {
+func currentPlanes() string {
 	buf := bytes.Buffer{}
 
 	buf.WriteString("[")
@@ -184,7 +203,7 @@ func getAllPlanes() string {
 	buf := bytes.Buffer{}
 
 	buf.WriteString("{current: ")
-	buf.WriteString(dumpJson())
+	buf.WriteString(currentPlanes())
 
 	buf.WriteString(",\npast: [")
 
@@ -201,107 +220,6 @@ func getAllPlanes() string {
 	buf.WriteString(strings.Join(sl, ",\n"))
 	buf.WriteString("] }")
 	return buf.String()
-}
-
-func updatePlane(m *message) {
-	buf := bytes.Buffer{}
-	if m == nil {
-		return
-	}
-
-	pl, ok := planeCache[m.icao]
-	var err error
-	if !ok {
-		pl, err = LoadPlane(m.icao)
-		if err != nil && err != planeNotFound {
-			fmt.Fprintf(os.Stderr, "error loading from database: %v\n", err)
-			pl = &Plane{Icao: m.icao}
-		}
-		planeCache[pl.Icao] = pl
-	}
-
-	if m.dGen.After(pl.LastSeen) {
-		pl.LastSeen = m.dGen
-	}
-
-	if verbose {
-		buf.WriteString(fmt.Sprintf("%s - %06X -", m.dGen.String(), m.icao))
-	}
-
-	var dataStr string
-	var written bool
-	switch m.tType {
-	case 1:
-		written = pl.SetCallSign(m.callSign)
-		if verbose {
-			dataStr = fmt.Sprintf(" Callsign: %q", m.callSign)
-		}
-	case 2:
-		written = pl.SetAltitude(m.altitude) || written
-		written = pl.SetSpeed(m.groundSpeed) || written
-		written = pl.SetTrack(m.track) || written
-		written = pl.SetLocation(m.latitude, m.longitude, m.dGen) || written
-		written = pl.SetOnGround(m.onGround) || written
-		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d, Speed: %.2f, Track: %.2f, Lat: %s, Lon: %s", m.altitude, m.groundSpeed, m.track, m.latitude, m.longitude)
-		}
-	case 3:
-		written = pl.SetAltitude(m.altitude) || written
-		written = pl.SetLocation(m.latitude, m.longitude, m.dGen) || written
-		written = pl.SetSquawkCh(m.squawkCh) || written
-		written = pl.SetEmergency(m.emergency) || written
-		written = pl.SetIdent(m.ident) || written
-		written = pl.SetOnGround(m.onGround) || written
-		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", m.altitude, m.latitude, m.longitude)
-		}
-	case 4:
-		written = pl.SetSpeed(m.groundSpeed) || written
-		written = pl.SetTrack(m.track) || written
-		written = pl.SetVertical(m.vertical) || written
-		if verbose {
-			dataStr = fmt.Sprintf(" Speed: %.2f, Track: %.2f, Vertical Rate: %d", m.groundSpeed, m.track, m.vertical)
-		}
-	case 5:
-		written = pl.SetAltitude(m.altitude) || written
-		written = pl.SetSquawkCh(m.squawkCh) || written
-		written = pl.SetIdent(m.ident) || written
-		written = pl.SetOnGround(m.onGround) || written
-		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d", m.altitude)
-		}
-	case 6:
-		written = pl.SetAltitude(m.altitude) || written
-		written = pl.SetSquawk(m.squawk) || written
-		written = pl.SetSquawkCh(m.squawkCh) || written
-		written = pl.SetEmergency(m.emergency) || written
-		written = pl.SetIdent(m.ident) || written
-		written = pl.SetOnGround(m.onGround) || written
-		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d, SquawkCode: %q", m.altitude, m.squawk)
-		}
-	case 7:
-		written = pl.SetAltitude(m.altitude) || written
-		written = pl.SetOnGround(m.onGround) || written
-		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d", m.altitude)
-		}
-	case 8:
-		written = pl.SetOnGround(m.onGround) || written
-		if verbose {
-			dataStr = fmt.Sprintf(" OnGround: %v", m.onGround)
-		}
-	}
-	if written {
-		pl.SetHistory(m)
-	}
-
-	if verbose {
-		buf.WriteString(dataStr)
-
-		fmt.Println(buf.String())
-		buf.Reset()
-	}
 }
 
 func connect(out chan<- *message) {
