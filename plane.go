@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+const FreshPeriod = time.Minute * 10
+
 type Location struct {
 	id        int
 	Time      time.Time
@@ -283,7 +285,8 @@ func updatePlane(m *message, pl *Plane) {
 			dataStr = fmt.Sprintf(" OnGround: %v", m.onGround)
 		}
 	}
-	if written {
+
+	if written || m.dGen.Sub(pl.LastSeen) > FreshPeriod {
 		pl.SetHistory(m)
 	}
 
