@@ -286,6 +286,7 @@ func updatePlane(m *message, pl *Plane) {
 		}
 	}
 
+	// Log message if it updated a value, or the last message was more than 10 minutes ago
 	if written || m.dGen.Sub(pl.LastSeen) > FreshPeriod {
 		pl.SetHistory(m)
 	}

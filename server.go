@@ -8,18 +8,25 @@ import (
 	"strconv"
 	"strings"
 	"bytes"
+	"time"
 )
 
-type BoardCmd int
+type BoardCmd struct {
+	Cmd   int
+	Icao  uint
+	Since time.Time
+}
 
 const (
-	ListCurrent BoardCmd = iota
-	ListAll
+	GetCurrent = iota
+	GetAll
+	GetPlane
 )
+
 
 type Server struct {
 	json chan string
-	cmd  chan<- BoardCmd
+	cmd  chan<- *BoardCmd
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -28,23 +35,42 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/favicon.ico" {
 		w.WriteHeader(http.StatusNotFound)
 		return
-	} else if r.URL.Path == "/" {
-		s.cmd <- ListCurrent
-		s.writeResponse(<-s.json, w)
-	} else if r.URL.Path == "/All" || r.URL.Path == "/all" {
-		s.cmd <- ListAll
-		s.writeResponse(<-s.json, w)
-	} else {
-		icaoStr := r.URL.Path[1:]
-		icao, err := strconv.ParseUint(icaoStr, 16, 0)
+	}
+
+	parts := strings.Split(r.URL.Path, "/")[1:]
+	reqCmd := strings.ToLower(parts[0])
+	var icao uint64
+	var err error
+	if len(parts) == 2 {
+		icao, err = strconv.ParseUint(parts[1], 16, 0)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("Not found."))
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "invlaid ICAO number: %q", parts[1])
+			fmt.Fprintf(os.Stderr, "Bad request URL: %q", r.URL.Path)
 			return
 		}
-		s.cmd <- BoardCmd(icao)
-		s.writeResponse(<-s.json, w)
 	}
+
+	bc := &BoardCmd{Icao: uint(icao)}
+
+	switch reqCmd {
+	case "":
+	case "active":
+		bc.Cmd = GetCurrent
+	case "planes":
+		if icao > 0 {
+			bc.Cmd = GetPlane
+		} else {
+			bc.Cmd = GetAll
+		}
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "unkown command: %q", reqCmd)
+		fmt.Fprintf(os.Stderr, "Bad request URL: %q", r.URL.Path)
+		return
+	}
+	s.cmd <- bc
+	s.writeResponse(<-s.json, w)
 }
 
 func (s *Server) writeResponse(resp string, w http.ResponseWriter) {
@@ -64,7 +90,7 @@ func (s *Server) writeResponse(resp string, w http.ResponseWriter) {
 
 var server *Server
 
-func StartServer(c chan<- BoardCmd) chan<- string {
+func StartServer(c chan<- *BoardCmd) chan<- string {
 	if server == nil || server.json == nil {
 		server = &Server{cmd: c}
 		server.json = make(chan string)

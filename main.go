@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	msgs := make(chan *message, 50)
-	cmds := make(chan BoardCmd)
+	cmds := make(chan *BoardCmd)
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt)
 
@@ -99,20 +99,18 @@ func getPlaneByIcao(icao uint) (*Plane, error) {
 	return pl, nil
 }
 
-func handleCommand(cmd BoardCmd) string {
-	switch cmd {
-	case ListCurrent:
+func handleCommand(cmd *BoardCmd) string {
+	switch cmd.Cmd {
+	case GetCurrent:
 		return currentPlanes()
-	case ListAll:
+	case GetAll:
 		return getAllPlanes()
+	case GetPlane:
+		return detailedPlane(cmd.Icao)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown board command: %v", cmd.Cmd)
+		return ""
 	}
-
-	if cmd < BoardCmd(10) {
-		return "" // Empty for unknown command right now.
-	}
-
-	icao := uint(cmd)
-	return detailedPlane(icao)
 }
 
 func saveData(t time.Time) {
