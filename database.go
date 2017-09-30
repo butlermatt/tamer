@@ -58,7 +58,8 @@ const (
 CREATE TABLE IF NOT EXISTS Planes (icao INTEGER PRIMARY KEY, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lastSeen INTEGER, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
 `
 	queryPlane = `SELECT altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes WHERE icao = ?`
-	queryAllPlanes = `SELECT icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes `
+	queryAllPlanes = `SELECT icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes ORDER BY lastSeen`
+	queryAllPlanesSince = `SELECT icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes WHERE lastSeen >= ? ORDER BY lastSeen`
 
 )
 
@@ -103,14 +104,19 @@ func close_db() error {
 	return err
 }
 
-func LoadAll() ([]*Plane, error) {
+func LoadAll(t time.Time) ([]*Plane, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to begin transaction")
 	}
 	defer tx.Commit()
 
-	rows, err := tx.Query(queryAllPlanes)
+	var rows *sql.Rows
+	if t == zeroTime {
+		rows, err = tx.Query(queryAllPlanes)
+	} else {
+		rows, err = tx.Query(queryAllPlanesSince, t.UnixNano())
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query planes")
 	}

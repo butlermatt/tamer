@@ -23,6 +23,7 @@ const (
 	GetPlane
 )
 
+var zeroTime = time.Time{}
 
 type Server struct {
 	json chan string
@@ -52,6 +53,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bc := &BoardCmd{Icao: uint(icao)}
+
+	ss := r.URL.Query()["s"]
+	if len(ss) >= 1 {
+		si, err := strconv.ParseInt(ss[0], 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "unable to convert since time: %q. %#v\n", ss[0], err)
+		}
+		bc.Since = time.Unix(si, 0)
+	}
 
 	switch reqCmd {
 	case "":
@@ -112,18 +122,16 @@ func StartServer(c chan<- *BoardCmd) chan<- string {
 }
 
 
-func currentPlanes() string {
+func currentPlanes(t time.Time) string {
 	buf := bytes.Buffer{}
 
 	buf.WriteString("[")
 
-	l := len(planeCache)
-	sl := make([]string, l)
-
-	l -= 1
+	sl := []string{}
 	for _, pl := range planeCache {
-		sl[l] = pl.ToJson()
-		l -= 1
+		if t == zeroTime || pl.LastSeen.After(t) {
+			sl = append(sl, pl.ToJson())
+		}
 	}
 
 	buf.WriteString(strings.Join(sl, ",\n"))
@@ -132,22 +140,24 @@ func currentPlanes() string {
 	return buf.String()
 }
 
-func getAllPlanes() string {
+func getAllPlanes(t time.Time) string {
 	buf := bytes.Buffer{}
 
 	buf.WriteString("{current: ")
-	buf.WriteString(currentPlanes())
+	buf.WriteString(currentPlanes(t))
 
 	buf.WriteString(",\npast: [")
 
-	planes, err := LoadAll()
+	planes, err := LoadAll(t)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading planes: %v\n", err)
 		return "[]"
 	}
-	sl := make([]string, len(planes))
-	for i, pl := range planes {
-		sl[i] = pl.ToJson()
+	sl := []string{}
+	for _, pl := range planes {
+		if t == zeroTime || pl.LastSeen.After(t) {
+			sl = append(sl, pl.ToJson())
+		}
 	}
 
 	buf.WriteString(strings.Join(sl, ",\n"))

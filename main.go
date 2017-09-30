@@ -57,6 +57,9 @@ func main() {
 		select {
 		case m := <-msgs:
 			pl, _ := getPlaneByIcao(m.icao)
+			if _, ok := planeCache[m.icao]; !ok {
+				planeCache[m.icao] = pl
+			}
 			updatePlane(m, pl)
 		case cmd := <-cmds:
 			json <- handleCommand(cmd)
@@ -90,7 +93,6 @@ func getPlaneByIcao(icao uint) (*Plane, error) {
 			fmt.Fprintf(os.Stderr, "error loading from database: %v\n", err)
 			pl = &Plane{Icao: icao}
 		}
-		planeCache[pl.Icao] = pl
 		if err != nil {
 			return pl, planeNotFound
 		}
@@ -102,9 +104,9 @@ func getPlaneByIcao(icao uint) (*Plane, error) {
 func handleCommand(cmd *BoardCmd) string {
 	switch cmd.Cmd {
 	case GetCurrent:
-		return currentPlanes()
+		return currentPlanes(cmd.Since)
 	case GetAll:
-		return getAllPlanes()
+		return getAllPlanes(cmd.Since)
 	case GetPlane:
 		return detailedPlane(cmd.Icao)
 	default:
