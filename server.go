@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
+	"bytes"
 )
 
 type BoardCmd int
@@ -81,4 +83,72 @@ func StartServer(c chan<- BoardCmd) chan<- string {
 	}()
 
 	return server.json
+}
+
+
+func currentPlanes() string {
+	buf := bytes.Buffer{}
+
+	buf.WriteString("[")
+
+	l := len(planeCache)
+	sl := make([]string, l)
+
+	l -= 1
+	for _, pl := range planeCache {
+		sl[l] = pl.ToJson()
+		l -= 1
+	}
+
+	buf.WriteString(strings.Join(sl, ",\n"))
+
+	buf.WriteString("]")
+	return buf.String()
+}
+
+func getAllPlanes() string {
+	buf := bytes.Buffer{}
+
+	buf.WriteString("{current: ")
+	buf.WriteString(currentPlanes())
+
+	buf.WriteString(",\npast: [")
+
+	planes, err := LoadAll()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading planes: %v\n", err)
+		return "[]"
+	}
+	sl := make([]string, len(planes))
+	for i, pl := range planes {
+		sl[i] = pl.ToJson()
+	}
+
+	buf.WriteString(strings.Join(sl, ",\n"))
+	buf.WriteString("] }")
+	return buf.String()
+}
+
+
+func detailedPlane(icao uint) string {
+	pl, err := getPlaneByIcao(icao)
+	if err != nil {
+		return ""
+	}
+
+	LoadLocations(pl)
+	var buf bytes.Buffer
+	buf.WriteString("{plane: ")
+	buf.WriteString(pl.ToJson())
+	buf.WriteString(",\nlocations: [")
+
+	locs := make([]string, len(pl.Locations))
+	i := 0
+	for _, l := range pl.Locations {
+		locs[i] = fmt.Sprintf("{location: \"%s,%s\", time: %q}", l.Latitude, l.Longitude, l.Time.String())
+		i++
+	}
+	buf.WriteString(strings.Join(locs, ","))
+	buf.WriteString("]}")
+	return buf.String()
 }

@@ -1,14 +1,10 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 )
 
@@ -119,29 +115,6 @@ func handleCommand(cmd BoardCmd) string {
 	return detailedPlane(icao)
 }
 
-func detailedPlane(icao uint) string {
-	pl, err := getPlaneByIcao(icao)
-	if err != nil {
-		return ""
-	}
-
-	LoadLocations(pl)
-	var buf bytes.Buffer
-	buf.WriteString("{plane: ")
-	buf.WriteString(pl.ToJson())
-	buf.WriteString(",\nlocations: [")
-
-	locs := make([]string, len(pl.Locations))
-	i := 0
-	for _, l := range pl.Locations {
-		locs[i] = fmt.Sprintf("{location: \"%s,%s\", time: %q}", l.Latitude, l.Longitude, l.Time.String())
-		i++
-	}
-	buf.WriteString(strings.Join(locs, ","))
-	buf.WriteString("]}")
-	return buf.String()
-}
-
 func saveData(t time.Time) {
 	if len(planeCache) == 0 {
 		return
@@ -176,77 +149,5 @@ func saveData(t time.Time) {
 	err := SavePlanes(toSave)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error saving planes to database: %v\n", err)
-	}
-}
-
-func currentPlanes() string {
-	buf := bytes.Buffer{}
-
-	buf.WriteString("[")
-
-	l := len(planeCache)
-	sl := make([]string, l)
-
-	l -= 1
-	for _, pl := range planeCache {
-		sl[l] = pl.ToJson()
-		l -= 1
-	}
-
-	buf.WriteString(strings.Join(sl, ",\n"))
-
-	buf.WriteString("]")
-	return buf.String()
-}
-
-func getAllPlanes() string {
-	buf := bytes.Buffer{}
-
-	buf.WriteString("{current: ")
-	buf.WriteString(currentPlanes())
-
-	buf.WriteString(",\npast: [")
-
-	planes, err := LoadAll()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error loading planes: %v\n", err)
-		return "[]"
-	}
-	sl := make([]string, len(planes))
-	for i, pl := range planes {
-		sl[i] = pl.ToJson()
-	}
-
-	buf.WriteString(strings.Join(sl, ",\n"))
-	buf.WriteString("] }")
-	return buf.String()
-}
-
-func connect(out chan<- *message) {
-	i := 5
-	for {
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			dur := time.Millisecond * time.Duration(i) * time.Duration(100)
-			fmt.Fprintf(os.Stderr, "Failed to connect. %v. Retrying in %v\n", err, dur)
-			time.Sleep(dur)
-			i += i
-			continue
-		}
-		i = 5
-		fmt.Println("Connected")
-		reader := bufio.NewReader(conn)
-		for b, err := reader.ReadBytes('\n'); err == nil; b, err = reader.ReadBytes('\n') {
-			if verbose && veryVerbose {
-				fmt.Printf("%s", b)
-			}
-			go parseMessage(b, out)
-		}
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading connection. %v. Retrying\n", err)
-		} else {
-			fmt.Fprintln(os.Stderr, "Connection closed, reconnecting.")
-		}
 	}
 }

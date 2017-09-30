@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"net"
+	"bufio"
 )
 
 const (
@@ -37,6 +39,54 @@ const (
 	onGround     // Flag to indicate ground squawk switch is active
 )
 
+type message struct {
+	icao        uint
+	tType       int
+	dGen        time.Time
+	dRec        time.Time
+	callSign    string
+	altitude    int
+	groundSpeed float32
+	track       float32
+	latitude    string
+	longitude   string
+	vertical    int
+	squawk      string
+	squawkCh    bool
+	emergency   bool
+	ident       bool
+	onGround    bool
+}
+
+func connect(out chan<- *message) {
+	i := 5
+	for {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			dur := time.Millisecond * time.Duration(i) * time.Duration(100)
+			fmt.Fprintf(os.Stderr, "Failed to connect. %v. Retrying in %v\n", err, dur)
+			time.Sleep(dur)
+			i += i
+			continue
+		}
+		i = 5
+		fmt.Println("Connected")
+		reader := bufio.NewReader(conn)
+		for b, err := reader.ReadBytes('\n'); err == nil; b, err = reader.ReadBytes('\n') {
+			if verbose && veryVerbose {
+				fmt.Printf("%s", b)
+			}
+			go parseMessage(b, out)
+		}
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading connection. %v. Retrying\n", err)
+		} else {
+			fmt.Fprintln(os.Stderr, "Connection closed, reconnecting.")
+		}
+	}
+}
+
 func parseMessage(m []byte, out chan<- *message) {
 	parts := bytes.Split(m, []byte{','})
 	if len(parts) != 22 {
@@ -57,7 +107,7 @@ func parseMessage(m []byte, out chan<- *message) {
 	mtype := string(parts[msgType])
 	if mtype != "MSG" {
 		// TODO I'm not ready to handle this yet.
-		fmt.Println("Unable to handle message of type %q\n", mtype)
+		fmt.Fprintf(os.Stderr,"Unable to handle message of type %q\n", mtype)
 		return
 	}
 
@@ -73,25 +123,6 @@ func parseMessage(m []byte, out chan<- *message) {
 	}
 
 	out <- msg
-}
-
-type message struct {
-	icao        uint
-	tType       int
-	dGen        time.Time
-	dRec        time.Time
-	callSign    string
-	altitude    int
-	groundSpeed float32
-	track       float32
-	latitude    string
-	longitude   string
-	vertical    int
-	squawk      string
-	squawkCh    bool
-	emergency   bool
-	ident       bool
-	onGround    bool
 }
 
 func parseTime(d string, t string) (time.Time, error) {
