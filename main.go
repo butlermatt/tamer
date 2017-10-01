@@ -149,6 +149,9 @@ func saveData(t time.Time) {
 		return
 	}
 
+	if t != zeroTime {
+		go SavePlanes(toSave)
+	}
 	err := SavePlanes(toSave)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error saving planes to database: %v\n", err)
