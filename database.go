@@ -17,6 +17,8 @@ const (
 	createLocationTable = `
 CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat TEXT, lon TEXT, time INTEGER)
 `
+	queryLocations = `SELECT ROWID, lat, lon, time FROM Locations WHERE icao = ? ORDER BY time`
+	queryLocationsSince = `SELECT ROWID, lat, lon, time FROM Locations WHERE icao = ? AND time >= ? ORDER BY time`
 )
 
 // Messages
@@ -225,29 +227,37 @@ func LoadCallsigns(p *Plane, tx *sql.Tx) error {
 	return nil
 }
 
-func LoadLocations(p *Plane) error {
-	rows, err := db.Query(`SELECT lat, lon, time FROM Locations WHERE icao = ? ORDER BY time ASC`, int(p.Icao))
+func LoadLocations(icao uint, t time.Time) ([]Location, error) {
+	var rows *sql.Rows
+	var err error
+
+	if t == zeroTime {
+		rows, err = db.Query(queryLocations, int(icao))
+	} else {
+		rows, err = db.Query(queryLocationsSince, int(icao), t.UnixNano())
+	}
 	if err != nil {
-		return errors.Wrap(err, "unable to load locations")
+		return nil, errors.Wrap(err, "unable to load locations")
 	}
 	defer rows.Close()
 
+	locs := []Location{}
 	for rows.Next() {
 		var l Location
 		var tt int64
-		err = rows.Scan(&l.Latitude, &l.Longitude, &tt)
+		err = rows.Scan(&l.id, &l.Latitude, &l.Longitude, &tt)
 		if err != nil {
-			return errors.Wrap(err, "unable to load values from Locations table")
+			return nil, errors.Wrap(err, "unable to load values from Locations table")
 		}
 		l.Time = time.Unix(0, tt)
-		p.Locations = append(p.Locations, l)
+		locs = append(locs, l)
 	}
 
 	if err = rows.Err(); err != nil {
-		return errors.Wrap(err, "error iterating over Location rows")
+		return locs, errors.Wrap(err, "error iterating over Location rows")
 	}
 
-	return nil
+	return locs, nil
 }
 
 func SavePlanes(planes []*Plane) error {

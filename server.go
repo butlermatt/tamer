@@ -21,6 +21,7 @@ const (
 	GetCurrent = iota
 	GetAll
 	GetPlane
+	GetLocations
 )
 
 var zeroTime = time.Time{}
@@ -45,9 +46,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(parts) == 2 {
 		icao, err = strconv.ParseUint(parts[1], 16, 0)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "invlaid ICAO number: %q", parts[1])
-			fmt.Fprintf(os.Stderr, "Bad request URL: %q", r.URL.Path)
+			s.badRequest(w, http.StatusBadRequest, fmt.Sprintf("invalid ICAO number: %q", parts[1]), r.URL.Path)
 			return
 		}
 	}
@@ -73,14 +72,24 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			bc.Cmd = GetAll
 		}
+	case "locations":
+		if icao == 0 {
+			s.badRequest(w, http.StatusBadRequest, "missing required plane icao number", r.URL.Path)
+			return
+		}
+		bc.Cmd = GetLocations
 	default:
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "unkown command: %q", reqCmd)
-		fmt.Fprintf(os.Stderr, "Bad request URL: %q", r.URL.Path)
+		s.badRequest(w, http.StatusNotFound, "not found", r.URL.Path)
 		return
 	}
 	s.cmd <- bc
 	s.writeResponse(<-s.json, w)
+}
+
+func (s *Server) badRequest(w http.ResponseWriter, status int, errMsg string, path string) {
+	w.WriteHeader(status)
+	fmt.Fprint(w, errMsg)
+	fmt.Fprintf(os.Stderr, "Bad request URL: %q", path)
 }
 
 func (s *Server) writeResponse(resp string, w http.ResponseWriter) {
@@ -165,26 +174,30 @@ func getAllPlanes(t time.Time) string {
 	return buf.String()
 }
 
-
 func detailedPlane(icao uint) string {
 	pl, err := getPlaneByIcao(icao)
 	if err != nil {
 		return ""
 	}
 
-	LoadLocations(pl)
-	var buf bytes.Buffer
-	buf.WriteString("{plane: ")
-	buf.WriteString(pl.ToJson())
-	buf.WriteString(",\nlocations: [")
+	return pl.ToJson()
+}
 
-	locs := make([]string, len(pl.Locations))
-	i := 0
-	for _, l := range pl.Locations {
-		locs[i] = fmt.Sprintf("{location: \"%s,%s\", time: %q}", l.Latitude, l.Longitude, l.Time.String())
-		i++
+func getPlaneLocations(icao uint, t time.Time) string {
+	locs, err := LoadLocations(icao, t)
+	if err != nil {
+		return "[]"
 	}
-	buf.WriteString(strings.Join(locs, ","))
-	buf.WriteString("]}")
+
+	ll := make([]string, len(locs))
+	buf := bytes.Buffer{}
+	buf.WriteString("[")
+
+	for i, l := range locs {
+		ll[i] = fmt.Sprintf("{id: %d, latitude: %q, longitude: %q, time: %q}", l.id, l.Latitude, l.Longitude, l.Time.String())
+	}
+
+	buf.WriteString(strings.Join(ll, ",\n"))
+	buf.WriteString("]")
 	return buf.String()
 }

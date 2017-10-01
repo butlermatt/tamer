@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	// Frequency of the save tick. Any planes last seen older than this are saved and removed from active
 	savePeriod time.Duration = time.Minute * 1
 )
 
@@ -109,6 +110,8 @@ func handleCommand(cmd *BoardCmd) string {
 		return getAllPlanes(cmd.Since)
 	case GetPlane:
 		return detailedPlane(cmd.Icao)
+	case GetLocations:
+		return getPlaneLocations(cmd.Icao, cmd.Since)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown board command: %v", cmd.Cmd)
 		return ""
