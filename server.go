@@ -152,10 +152,10 @@ func currentPlanes(t time.Time) string {
 func getAllPlanes(t time.Time) string {
 	buf := bytes.Buffer{}
 
-	buf.WriteString("{current: ")
+	buf.WriteString("{\"current\": ")
 	buf.WriteString(currentPlanes(t))
 
-	buf.WriteString(",\npast: [")
+	buf.WriteString(",\n\"past\": [")
 
 	planes, err := LoadAll(t)
 	if err != nil {
@@ -194,7 +194,7 @@ func getPlaneLocations(icao uint, t time.Time) string {
 	buf.WriteString("[")
 
 	for i, l := range locs {
-		ll[i] = fmt.Sprintf("{id: %d, latitude: %q, longitude: %q, time: %q}", l.id, l.Latitude, l.Longitude, l.Time.String())
+		ll[i] = fmt.Sprintf("{\"id\": %d, \"latitude\": %q, \"longitude\": %q, \"time\": %q}", l.id, l.Latitude, l.Longitude, l.Time.String())
 	}
 
 	buf.WriteString(strings.Join(ll, ",\n"))
