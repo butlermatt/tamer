@@ -24,6 +24,7 @@ type ValuePair struct {
 // Don't add that to the history. However add new changes. Always update LastSeen if after
 type Plane struct {
 	Icao      uint
+	CallSign  string
 	CallSigns []ValuePair
 	Squawks   []ValuePair
 	Locations []Location
@@ -44,6 +45,7 @@ func (p *Plane) ToJson() string {
 	buf := bytes.Buffer{}
 	buf.WriteString("{")
 	buf.WriteString(fmt.Sprintf("\"icao\": \"%06X\", ", p.Icao))
+	buf.WriteString(fmt.Sprintf("\"callsign\": %q, ", p.CallSign))
 	buf.WriteString("\"callsigns\": [")
 	for i, cs := range p.CallSigns {
 		buf.WriteString(fmt.Sprintf("%q", cs.value))
@@ -77,14 +79,16 @@ func (p *Plane) ToJson() string {
 // SetCallSign tries to add the call sign to the slice of CallSigns for the Plane.
 // Returns true if it was added, false if the callsign was already in the slice.
 func (p *Plane) SetCallSign(cs string) bool {
-	if cs == "" {
+	if cs == "" || p.CallSign == cs {
 		return false
 	}
+	p.CallSign = cs
 
 	// More likely to find a match at the end, so search backwards.
 	for i := len(p.CallSigns) - 1; i >= 0; i-- {
 		if cs == p.CallSigns[i].value {
-			return false
+			// if it exists, don't add it again
+			return true // True because at the least the current callsign has been set.
 		}
 	}
 

@@ -43,7 +43,7 @@ func main() {
 	if verbose {
 		fmt.Println("Initalizing databases")
 	}
-	err := init_db()
+	err := initDB()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "errors setting up database: %v", err)
 		os.Exit(1)
@@ -68,7 +68,7 @@ func main() {
 			saveData(t)
 		case <-sigint:
 			saveData(time.Time{})
-			err = close_db()
+			err = closeDB()
 			tick.Stop()
 			close(cmds)
 			cmds = nil

@@ -31,16 +31,6 @@ CREATE TABLE IF NOT EXISTS Messages (icao INTEGER NOT NULL, time INTEGER, callsi
 `
 )
 
-// Squawks
-// +-------------------------------+
-// | RowID | ICAO (i) | Squawk (s) |
-// +-------------------------------+
-const (
-	createSquawksTable = `
-CREATE TABLE IF NOT EXISTS Squawks (icao INTEGER NOT NULL, squawk TEXT)
-`
-)
-
 // Callsigns
 // +---------------------------------+
 // | RowID | ICAO (i) | CallSign (s) |
@@ -62,14 +52,13 @@ CREATE TABLE IF NOT EXISTS Planes (icao INTEGER PRIMARY KEY, altitude INTEGER, t
 	queryPlane = `SELECT altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes WHERE icao = ?`
 	queryAllPlanes = `SELECT icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes ORDER BY lastSeen`
 	queryAllPlanesSince = `SELECT icao, altitude, track, speed, vertical, lastSeen, sqch, emerg, ident, grnd FROM Planes WHERE lastSeen >= ? ORDER BY lastSeen`
-
 )
 
 var planeNotFound = errors.New("plane not found")
 
 var db *sql.DB
 
-func init_db() error {
+func initDB() error {
 	var err error
 	db, err = sql.Open("sqlite3", "./planes.db")
 	if err != nil {
@@ -84,10 +73,6 @@ func init_db() error {
 	if err != nil {
 		return errors.Wrap(err, "unable to create Callsign table.")
 	}
-	_, err = db.Exec(createSquawksTable)
-	if err != nil {
-		return errors.Wrap(err, "unable to create Squawks table.")
-	}
 	_, err = db.Exec(createMsgsTable)
 	if err != nil {
 		return errors.Wrap(err, "unable to create Messages table.")
@@ -100,7 +85,7 @@ func init_db() error {
 	return nil
 }
 
-func close_db() error {
+func closeDB() error {
 	err := db.Close()
 
 	return err
@@ -140,10 +125,6 @@ func LoadAll(t time.Time) ([]*Plane, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = LoadSquawks(p, tx)
-		if err != nil {
-			return nil, err
-		}
 		planes = append(planes, p)
 	}
 
@@ -171,7 +152,6 @@ func LoadPlane(icao uint) (*Plane, error) {
 	p.LastSeen = time.Unix(0, tt)
 
 	fmt.Println("Found plane in DB. Loading other values")
-	err = LoadSquawks(p, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -181,28 +161,6 @@ func LoadPlane(icao uint) (*Plane, error) {
 	}
 
 	return p, nil
-}
-
-func LoadSquawks(p *Plane, tx *sql.Tx) error {
-	rows, err := tx.Query("SELECT squawk FROM Squawks WHERE icao = ?", int(p.Icao))
-	if err != nil {
-		return errors.Wrap(err, "error retrieving Squawks")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		sw := ValuePair{loaded: true}
-		err = rows.Scan(&sw.value)
-		if err != nil {
-			return errors.Wrap(err, "error reading values from row in Squawk table")
-		}
-		p.Squawks = append(p.Squawks, sw)
-	}
-	if err = rows.Err(); err != nil {
-		return errors.Wrap(err, "error iterating over results of squawks.")
-	}
-
-	return nil
 }
 
 func LoadCallsigns(p *Plane, tx *sql.Tx) error {
@@ -222,6 +180,10 @@ func LoadCallsigns(p *Plane, tx *sql.Tx) error {
 	}
 	if err = rows.Err(); err != nil {
 		return errors.Wrap(err, "error iterating over results of callsigns.")
+	}
+
+	if len(p.CallSigns) > 0 {
+		p.CallSign = p.CallSigns[len(p.CallSigns) - 1].value
 	}
 
 	return nil
@@ -276,10 +238,6 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
-	sqSt, err := tx.Prepare(`INSERT INTO Squawks(icao, squawk) VALUES(?, ?)`)
-	if err != nil {
-		return err
-	}
 	lcSt, err := tx.Prepare(`INSERT INTO Locations(icao, lat, lon, time) VALUES(?, ?, ?, ?)`)
 	if err != nil {
 		return err
@@ -310,15 +268,6 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 			}
 		}
 
-		for _, sq := range pl.Squawks {
-			if !sq.loaded {
-				_, err = sqSt.Exec(int(pl.Icao), sq.value)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "error writing squawk: %#v", err)
-				}
-			}
-		}
-
 		for _, lc := range pl.Locations {
 			_, err = lcSt.Exec(int(pl.Icao), lc.Latitude, lc.Longitude, lc.Time.UnixNano())
 			if err != nil {
@@ -334,10 +283,6 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		}
 	}
 
-	err = sqSt.Close()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error closing squawk statement: %#v\n", err)
-	}
 	err = csSt.Close()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error closing callsign statement: %#v\n", err)
