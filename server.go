@@ -32,8 +32,6 @@ type Server struct {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Request: ", r.URL)
-
 	if r.URL.Path == "/favicon.ico" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -63,7 +61,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch reqCmd {
-	case "":
 	case "active":
 		bc.Cmd = GetCurrent
 	case "planes":
@@ -79,7 +76,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		bc.Cmd = GetLocations
 	default:
-		s.badRequest(w, http.StatusNotFound, "not found", r.URL.Path)
+		http.ServeFile(w, r, "www" + r.URL.Path)
 		return
 	}
 	s.cmd <- bc
