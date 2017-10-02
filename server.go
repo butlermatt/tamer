@@ -186,6 +186,15 @@ func detailedPlane(icao uint) string {
 func getPlaneLocations(icao uint, t time.Time) string {
 	locs, err := LoadLocations(icao, t)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "error loading locations: %#v", err)
+	}
+
+	pl := planeCache[icao]
+	if pl != nil {
+		locs = append(locs, pl.Locations...)
+	}
+
+	if len(locs) <= 0 {
 		return "[]"
 	}
 

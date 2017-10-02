@@ -192,6 +192,7 @@ func LoadCallsigns(p *Plane, tx *sql.Tx) error {
 func LoadLocations(icao uint, t time.Time) ([]Location, error) {
 	var rows *sql.Rows
 	var err error
+	locs := []Location{}
 
 	if t == zeroTime {
 		rows, err = db.Query(queryLocations, int(icao))
@@ -199,17 +200,16 @@ func LoadLocations(icao uint, t time.Time) ([]Location, error) {
 		rows, err = db.Query(queryLocationsSince, int(icao), t.UnixNano())
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to load locations")
+		return locs, errors.Wrap(err, "unable to load locations")
 	}
 	defer rows.Close()
 
-	locs := []Location{}
 	for rows.Next() {
 		var l Location
 		var tt int64
 		err = rows.Scan(&l.id, &l.Latitude, &l.Longitude, &tt)
 		if err != nil {
-			return nil, errors.Wrap(err, "unable to load values from Locations table")
+			return locs, errors.Wrap(err, "unable to load values from Locations table")
 		}
 		l.Time = time.Unix(0, tt)
 		locs = append(locs, l)
