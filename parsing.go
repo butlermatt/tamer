@@ -91,7 +91,7 @@ func parseMessage(m []byte, out chan<- *message) {
 	parts := bytes.Split(m, []byte{','})
 	if len(parts) != 22 {
 		if verbose {
-			fmt.Fprintf(os.Stderr, "Discarding bad message: %q", m)
+			fmt.Fprintf(os.Stderr, "Discarding bad message: %q\n", m)
 		}
 		return
 	}
