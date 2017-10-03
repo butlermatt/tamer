@@ -48,8 +48,8 @@ type message struct {
 	altitude    int
 	groundSpeed float32
 	track       float32
-	latitude    string
-	longitude   string
+	latitude    float32
+	longitude   float32
 	vertical    int
 	squawk      string
 	squawkCh    bool
@@ -196,13 +196,13 @@ func parseMsgType(msg [][]byte, tt int) (*message, error) {
 		m.altitude = parseInt(msg[alt])
 		m.groundSpeed = parseFloat(msg[groundSpeed])
 		m.track = parseFloat(msg[track])
-		m.latitude = string(msg[latitude])
-		m.longitude = string(msg[longitude])
+		m.latitude = parseFloat(msg[latitude])
+		m.longitude = parseFloat(msg[longitude])
 		m.onGround = parseBool(msg[onGround])
 	case 3:
 		m.altitude = parseInt(msg[alt])
-		m.latitude = string(msg[latitude])
-		m.longitude = string(msg[longitude])
+		m.latitude = parseFloat(msg[latitude])
+		m.longitude = parseFloat(msg[longitude])
 		m.squawkCh = parseBool(msg[squawkAlert])
 		m.emergency = parseBool(msg[emergency])
 		m.ident = parseBool(msg[identActive])

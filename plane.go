@@ -11,8 +11,8 @@ const FreshPeriod = time.Minute * 10
 type Location struct {
 	id        int
 	Time      time.Time
-	Latitude  string
-	Longitude string
+	Latitude  float32
+	Longitude float32
 }
 
 type ValuePair struct {
@@ -55,7 +55,7 @@ func (p *Plane) ToJson() string {
 	}
 	if len(p.Locations) > 0 {
 		lastLoc := p.Locations[len(p.Locations) - 1]
-		buf.WriteString(fmt.Sprintf("], \"location\": \"%s,%s\", ", lastLoc.Latitude, lastLoc.Longitude))
+		buf.WriteString(fmt.Sprintf("], \"location\": \"%f,%f\", ", lastLoc.Latitude, lastLoc.Longitude))
 	} else {
 		buf.WriteString("], ")
 	}
@@ -116,8 +116,8 @@ func (p *Plane) SetSquawk(s string) bool {
 
 // SetLocation creates a location from the specified Lat/lon and time and appends it
 // to the locations slice. Returns true if successful, and false if there are no values to add
-func (p *Plane) SetLocation(lat, lon string, t time.Time) bool {
-	if lat == "" || lon == "" {
+func (p *Plane) SetLocation(lat, lon float32, t time.Time) bool {
+	if lat == 0.0 || lon == 0.0 {
 		return false
 	}
 	l := Location{Time: t, Latitude: lat, Longitude: lon}
@@ -250,7 +250,7 @@ func updatePlane(m *message, pl *Plane) {
 		written = pl.SetIdent(m.ident) || written
 		written = pl.SetOnGround(m.onGround) || written
 		if verbose {
-			dataStr = fmt.Sprintf(" Altitude: %d, Lat: %s, Lon: %s", m.altitude, m.latitude, m.longitude)
+			dataStr = fmt.Sprintf(" Altitude: %d, Lat: %f, Lon: %f", m.altitude, m.latitude, m.longitude)
 		}
 	case 4:
 		written = pl.SetSpeed(m.groundSpeed) || written

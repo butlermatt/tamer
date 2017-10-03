@@ -11,11 +11,11 @@ import (
 
 // Locations
 // +-------------------------------------------------+
-// | RowID | ICAO (i) | Lat (s) | Lon (s) | time (i) |
+// | RowID | ICAO (i) | Lat (f) | Lon (f) | time (i) |
 // +-------------------------------------------------+
 const (
 	createLocationTable = `
-CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat TEXT, lon TEXT, time INTEGER)
+CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat REAL, lon REAL, time INTEGER)
 `
 	queryLocations = `SELECT ROWID, lat, lon, time FROM Locations WHERE icao = ? ORDER BY time`
 	queryLocationsSince = `SELECT ROWID, lat, lon, time FROM Locations WHERE icao = ? AND time >= ? ORDER BY time`
@@ -23,11 +23,11 @@ CREATE TABLE IF NOT EXISTS Locations (icao INTEGER NOT NULL, lat TEXT, lon TEXT,
 
 // Messages
 // +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-// | RowID | ICAO (i) | TimeStamp | CallSign (s) | Altitude (i) | Track (f) | Speed (f) | vertical (i) | Lat (s) | lon (s) | Squawk (s) | SqCh (b) | Emerg (b) | Ident (b) | Grnd (b) |
+// | RowID | ICAO (i) | TimeStamp | CallSign (s) | Altitude (i) | Track (f) | Speed (f) | vertical (i) | Lat (f) | lon (f) | Squawk (s) | SqCh (b) | Emerg (b) | Ident (b) | Grnd (b) |
 // +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 const (
 	createMsgsTable = `
-CREATE TABLE IF NOT EXISTS Messages (icao INTEGER NOT NULL, time INTEGER, callsign TEXT, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lat TEXT, lon TEXT, squawk TEXT, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
+CREATE TABLE IF NOT EXISTS Messages (icao INTEGER NOT NULL, time INTEGER, callsign TEXT, altitude INTEGER, track REAL, speed REAL, vertical INTEGER, lat REAL, lon REAL, squawk TEXT, sqch INTEGER, emerg INTEGER, ident INTEGER, grnd INTEGER)
 `
 )
 
