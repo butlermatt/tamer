@@ -200,7 +200,7 @@ func getPlaneLocations(icao uint, t time.Time) string {
 	buf.WriteString("[")
 
 	for i, l := range locs {
-		ll[i] = fmt.Sprintf("{\"id\": %d, \"latitude\": %q, \"longitude\": %q, \"time\": %q}", l.id, l.Latitude, l.Longitude, l.Time.String())
+		ll[i] = fmt.Sprintf("{\"id\": %d, \"latitude\": %f, \"longitude\": %f, \"time\": %q}", l.id, l.Latitude, l.Longitude, l.Time.String())
 	}
 
 	buf.WriteString(strings.Join(ll, ",\n"))
