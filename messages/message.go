@@ -59,27 +59,120 @@ type Message struct {
 }
 
 // ParseCSV will Parse the bytes of a CVS message format and return a pointer to a Message.
-func ParseCSV(m []byte) (*Message, error) {
-	parts = bytes.Split(m, []byte{','})
+func ParseCSV(csv string) (*Message, error) {
+	// Based on information from http://woodair.net/sbs/Article/Barebones42_Socket_Data.htm
+	parts = strings.Split(csv, ",")
 
 	if len(parts) != msgParts {
 		return nil, fmt.Errorf("invalid message format, wrong number of parts: %s", m)
 	}
 
-	 := string(parts[icao])
-	if modesHex
+	if parts[icao] == "000000" {
+		return nil, fmt.Errorf("message contains invalid icao")
+	}
+
+	if parts[msgType] != "MSG" {
+		return nil, fmt.Errof("unable to handle message of type %q", parts[msgType])
+	}
+
+	m := new(Message)
+	m.Transmission, err := strconv.Atoi(parts[tType])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing transmission type: %v", err)
+	}
+
+	m.Generated, err = parseTime(parts[dGen], parts[tGen])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing generated DateTime: %v", err)
+	}
+
+	m.Recorded, err = parseTime(parts[dLog], parts[tLog])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing recorded DateTime: %v", err)
+	}
+
+	switch m.Transmission {
+	case 1:
+		m.Callsign = strings.TrimSpace(parts[callSign])
+	case 2:
+		m.Altitude = parseInt(parts[alt])
+		m.Groundspeed = parseFloat32(parts[groundSpeed])
+		m.Track = parseFloat32(parts[track])
+		m.Latitude = parseFloat32(parts[latitude])
+		m.Longitude = parseFloat32(parts[longitude])
+		m.Onground = parseBool(parts[onGround])
+	case 3:
+		m.Altitude = parseInt(parts[alt])
+		m.Latitude = parseFloat32(parts[latitude])
+		m.Longitude = parseFloat32(parts[longitude])
+		m.SquawkChange = parseBool(parts[squawkAlert])
+		m.Emergency = parseBool(parts[emergency])
+		m.IdentActive = parseBool(parts[identActive])
+		m.Onground = parseBool(parts[onGround])
+	case 4:
+		m.Groundspeed = parseFloat32(parts[groundSpeed])
+		m.Track = parseFloat32(parts[track])
+		m.VeriticalRate = parseInt(parts[verticalRate])
+	case 5:
+		m.Altitude = parseInt(parts[alt])
+		m.SquawkChange = parseBool(parts[squawkAlert])
+		m.IdentActive = parseBool(parts[identActive])
+		m.Onground = parseBool(parts[onGround])
+	case 6:
+		m.Altitude = parseInt(parts[alt])
+		m.Squawk = strings.TrimSpace(parts[squawk])
+		m.SquawkChange = parseBool(parts[squawkAlert])
+		m.Emergency = parseBool(parts[emergency])
+		m.IdentActive = parseBool(parts[identActive])
+		m.Onground = parseBool(parts[onGround])
+	case 7:
+		m.Altitude = parseInt(parts[alt])
+		m.Onground = parseBool(parts[onGround])
+	case 8:
+		m.Onground = parseBool(parts[onGround])
+	}
+
+	return m, nil
 }
 
-func validIcao(icao []byte) bool {
-	const byte zero = '0'
-	if len(icao) != icaoLength {
-		return false
-	}
-	for _, b := range icao {
-		if b != zero {
-			return true
-		}
+func parseTime(d string, t string) (time.Time, error) {
+	dd, err := time.Parse("2006/01/02", d)
+	if err != nil {
+		return time.Time{}, err
 	}
 
-	return false;
+	tt, err := time.Parse("15:04:05.000", t)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return time.Date(dd.Year(), dd.Month(), dd.Day(), tt.Hour(), tt.Minute(), tt.Second(), tt.Nanosecond(), time.Local), nil
+}
+
+func parseInt(s string) int {
+	var i int
+	if len(s) <= 0 {
+		return i
+	}
+
+	i, _ = strconv.Atoi(s)
+	return i
+}
+
+func parseFloat32(s string) float32 {
+	if len(s) <= 0 {
+		return float32(0)
+	}
+	f, _ := strconv.ParseFloat(s, 32)
+	return float32(f)
+}
+
+func parseBool(s string) bool {
+	var b bool
+	if len(s) <= 0 {
+		return b
+	}
+
+	b, _ = strconv.ParseBool(s)
+	return b
 }
