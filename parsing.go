@@ -125,19 +125,19 @@ func parseMessage(m []byte, out chan<- *message) {
 	out <- msg
 }
 
-func parseTime(d string, t string) (time.Time, error) {
-	dd, err := time.Parse("2006/01/02", d)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	tt, err := time.Parse("15:04:05.000", t)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	return time.Date(dd.Year(), dd.Month(), dd.Day(), tt.Hour(), tt.Minute(), tt.Second(), tt.Nanosecond(), time.Local), nil
-}
+//func parseTime(d string, t string) (time.Time, error) {
+//	dd, err := time.Parse("2006/01/02", d)
+//	if err != nil {
+//		return time.Time{}, err
+//	}
+//
+//	tt, err := time.Parse("15:04:05.000", t)
+//	if err != nil {
+//		return time.Time{}, err
+//	}
+//
+//	return time.Date(dd.Year(), dd.Month(), dd.Day(), tt.Hour(), tt.Minute(), tt.Second(), tt.Nanosecond(), time.Local), nil
+//}
 
 func parseInt(i []byte) int {
 	var ii int
